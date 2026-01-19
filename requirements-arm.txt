@@ -145,12 +145,7 @@ sshtunnel
 stack-data
 sympy
 tabulate
-tensorboard
-tensorboard-data-server
 tensorflow
-tensorflow-io-gcs-filesystem
-tensorflow-macos
-tensorflow-metal
 termcolor
 terminado
 threadpoolctl
@@ -166,8 +161,6 @@ traitlets
 types-python-dateutil
 typing_extensions
 tzdata
-umap
-umap-learn
 uri-template
 urllib3
 wcwidth
