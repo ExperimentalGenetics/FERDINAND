@@ -1,0 +1,65 @@
+# GLOBAL CONFIGURATION FILE - imported by all jupyter notebooks
+# ==============================================================
+
+# Run configuration
+run_name: &run_name "2026-01-20"
+run_description: &run_description "test_run"
+data_source: &data_source "IMPC"
+
+# IMPC centers
+centers:
+  - WTSI
+  - JAX
+  - MRC Harwell
+  - UC Davis
+  - HMGU
+  - CCP-IMG
+  - TCP
+  - BCM
+  - ICS
+  - RBRC
+  - KMPC
+  - MARC
+
+# Mouse columns
+mouse_columns:
+  - center
+  - mouse_id
+  - strain
+  - dob
+  - sex
+  - cohort_type
+  - gene_symbol
+
+# Parameters related to radiographs of interest
+parameters:
+  - stable_id: "IMPC_XRY_034_001"
+    description: "whole body X-Ray dorso-ventral"
+    week: "14"
+    work_name: "xray_dv"
+
+# Maximum weeks of deviation from the due week according to the pipeline
+max_pipeline_deviation: 5
+
+# Settings summary
+settings:
+  run_name: *run_name
+  run_description: *run_description
+  data_source: *data_source
+
+project_root: ".."
+data_dir: "data"
+reports_dir: "reports"
+sqlite_db: "IMPC_radiographs.db"
+
+directories:
+  models_dir: "000_models"
+  raw_data_dir: "010_raw_data"
+  center_data_dir: "011_center_data"
+  all_data_dir: "012_all_data"
+  images_dir: "020_all_images"
+  thumbnails_dir: "021_all_thumbnails"
+  preprocessed_dir: "030_preprocessed_images"
+  preprocessed_thumbnails_dir: "031_preprocessed_thumbnails"
+  rotated_dir: "040_rotated_images"
+  rotated_thumbnails_dir: "041_rotated_thumbnails"
