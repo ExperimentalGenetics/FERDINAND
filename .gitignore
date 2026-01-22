@@ -6,3 +6,5 @@ requirements.txt
 *.egg-info
 config/configure.py
 logs/
+data/
+reports/
