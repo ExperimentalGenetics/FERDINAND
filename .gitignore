@@ -8,3 +8,4 @@ config/configure.py
 logs/
 data/
 reports/
+.DS_Store
