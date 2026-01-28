@@ -234,12 +234,9 @@ def plot_image_grid(image_files, cols=3, cell_size=2.5, images=None, titles=None
     plt.tight_layout()
     plt.show()
 
-import os
-from PIL import Image
-import pandas as pd
-
 def create_and_save_thumbnails(data: pd.DataFrame, centers: list, 
-                               path2images: str, path2thumbnails: str, size=(64, 64)):
+                               path2images: str, path2thumbnails: str, 
+                               size=(64, 64)):
     '''
     It creates small thumbnail versions of image files and saves them in a mirrored folder structure.
     
