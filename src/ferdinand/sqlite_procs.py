@@ -1,6 +1,7 @@
 
 import sqlite3
 import os
+import random
 
 import pandas as pd
 
@@ -144,6 +145,44 @@ def select_rows_by_column(conn, db_table, column, value, logger=None):
         if logger is not None:
             logger.error(f"Error querying {db_table} by column '{column}': {e}")
         raise
+
+def select_random_rows_with_images(conn, db_table, num_rows: int, center=None):
+    """
+    Select random rows from the database table that have downloaded images, optionally filtered by center.
+    :param conn: active sqlite3 connection to database
+    :param num_rows: number of random rows to select
+    :param center: name of the center (optional)
+    :param table_name: name of the database table
+    :return: list of tuples: The selected rows.
+    """
+    cursor = conn.cursor()
+
+    if center is not None:
+        cursor.execute(f"SELECT COUNT(*) FROM {db_table} WHERE downloaded='yes' AND center=?", (center,))
+        total_rows = cursor.fetchone()[0]
+    else:
+        cursor.execute(f"SELECT COUNT(*) FROM {db_table} WHERE downloaded='yes';")
+        total_rows = cursor.fetchone()[0]
+
+    selected_rows = []
+    if total_rows > 0:
+        offsets = random.sample(range(total_rows), num_rows)
+
+        for off in offsets:
+            if center is not None:
+                cursor.execute(f"SELECT * FROM {db_table} WHERE downloaded='yes' AND center=? LIMIT 1 OFFSET ?", (center, off))
+            else:
+                cursor.execute(f"SELECT * FROM {db_table} WHERE downloaded='yes' LIMIT 1 OFFSET ?", (off,))
+            row = cursor.fetchone()
+            if row:
+                selected_rows.append(row)
+
+    # get column names from cursor.description
+    col_names = [desc[0] for desc in cursor.description] if cursor.description else []
+
+    # build DataFrame
+    df = pd.DataFrame(selected_rows, columns=col_names)
+    return df
 
 def select_next_download_batch(conn, db_table, limit, status_column="downloaded", status_value="yes", order_by="center", logger=None):
     """
@@ -386,4 +425,74 @@ def update_column_values(conn, db_table, column, value, condition_column, condit
     params = (value, condition_value)
     cursor = conn.cursor()
     cursor.execute(update, params)
+    conn.commit()
+
+def update_preprocess_status(conn, db_table, status, omero_id, preproc_methods, img_height, img_width,
+                             logger=None):
+    """
+    Update the database table with information about an image preprocessing status. This function executes an SQL UPDATE on the table
+    to record the latest preprocessing status for the given image.
+    :param conn: active sqlite3 connection to database
+    :param status: status of the image preprocessing
+    :param omero_id: OMERO image ID associated with the image
+    :param preproc_methods: preprocessing methods applied to the image
+    """
+    add_column_to_table(conn, db_table, 'preprocessed', "TEXT", logger=logger)
+    update = f"""
+             UPDATE {db_table}
+             SET    preprocessed=?
+             WHERE  omero_id=? \
+             """
+    params = (status, omero_id)
+    cursor = conn.cursor()
+    cursor.execute(update, params)
+    conn.commit()
+    
+    img_dims = {'preproc_height': img_height, 'preproc_width': img_width}
+    for col, value in img_dims.items():
+        add_column_to_table(conn, db_table, col, "INTEGER", logger=logger)
+        update_dims = f"""
+                         UPDATE {db_table}
+                         SET    {col}=?
+                         WHERE  omero_id=? \
+                         """
+        params = (value, omero_id,)
+        cursor.execute(update_dims, params)
+        conn.commit()
+
+    for method in preproc_methods:
+        method = f"preproc_{method}"
+        add_column_to_table(conn, db_table, method, "TEXT", default_value="'no'", logger=logger)
+        if status == 'yes':
+            update_method = f"""
+                             UPDATE {db_table}
+                             SET    {method}='yes'
+                             WHERE  omero_id=? \
+                             """
+            params = (omero_id,)
+            cursor.execute(update_method, params)
+            conn.commit()
+
+def add_column_to_table(conn, db_table, column_name, column_type, default_value=None, logger=None):
+    """
+    Add a new column to an existing SQLite table if it does not already exist.
+    :param conn: active sqlite3 connection to database
+    :param table_name: name of the table to modify
+    :param column_name: name of the new column to add
+    :param column_type: data type of the new column (e.g., 'TEXT', 'INTEGER', 'REAL')
+    :param default_value: optional default value for the new column
+    """    
+    cursor = conn.cursor()
+
+    cursor.execute(f"PRAGMA table_info({db_table})")
+    existing_cols = [col[1] for col in cursor.fetchall()]
+
+    if column_name not in existing_cols:
+        if default_value is not None:
+            cursor.execute(f"ALTER TABLE {db_table} ADD COLUMN {column_name} {column_type} DEFAULT {default_value}")
+        else:
+            cursor.execute(f"ALTER TABLE {db_table} ADD COLUMN {column_name} {column_type}")
+        if logger is not None: 
+            logger.info(f" Added column '{column_name}' ({column_type}) to table '{db_table}'")
+
     conn.commit()
