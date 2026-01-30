@@ -9,7 +9,7 @@ import pandas as pd
 
 from PIL import Image
 
-from ferdinand import sqlite_procs as sqlp
+from ferdinand import sqlite_utils as sqlutl
 
 def setup_logger(log_file, log_level=logging.DEBUG):
     """
@@ -98,7 +98,7 @@ def select_random_jpegs(conn, db_table, no_of_images, image_path, center=None):
     :param no_of_images: Number of random images to select.
     :return: List of file paths to the selected images.
     """   
-    df_random_rows = sqlp.select_random_rows_with_images(conn, db_table, no_of_images, center)
+    df_random_rows = sqlutl.select_random_rows_with_images(conn, db_table, no_of_images, center)
     selected_images = []
     for idx, row in df_random_rows.iterrows():
         img_path = os.path.join(build_local_image_dir(image_path, 
@@ -117,10 +117,39 @@ def select_jpegs(conn, db_table, image_path, center=None):
     :param center: Center to filter images by (optional).
     :return: List of file paths to the selected images.
     """
-    df_rows = sqlp.select_rows(conn=conn, db_table=db_table, center=center)
+    df_rows = sqlutl.select_rows(conn=conn, db_table=db_table, center=center)
     selected_images = []
     for index, row in df_rows.iterrows():
         img_path = os.path.join(build_local_image_dir(image_path, 
+                                                      row['center'], 
+                                                      row['cohort_type'], 
+                                                      row['gene_symbol'], 
+                                                      row['sex']), f"{row['omero_id']}.jpg")
+        selected_images.append(img_path)
+    
+    return selected_images
+
+def select_jpegs_by_column(conn, db_table, column, value, source_path):
+    """
+    Selects images from the database where a specific column matches a given value and returns their file paths.
+    :param conn: Active sqlite connection.
+    :param column: Column name to filter by.
+    :param value: Value to match in the specified column.
+    :param source_path: Base path to the images.
+    :return: List of file paths to the selected images.
+    """
+    try: 
+        df_rows = sqlutl.select_rows_by_column(conn=conn, 
+                                            db_table=db_table,
+                                            column=column,
+                                            value=value)
+    except ValueError as e: 
+        print(f"{e}\n")
+        return []
+    
+    selected_images = []
+    for index, row in df_rows.iterrows():
+        img_path = os.path.join(build_local_image_dir(source_path, 
                                                       row['center'], 
                                                       row['cohort_type'], 
                                                       row['gene_symbol'], 

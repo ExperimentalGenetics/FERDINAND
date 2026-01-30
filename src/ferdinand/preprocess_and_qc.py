@@ -4,11 +4,10 @@ import cv2
 import numpy as np
 import pandas as pd
 
-from ferdinand.image_procs import resize_image_to_array
 from ferdinand.utils import build_local_image_dir
 
-import ferdinand.sqlite_procs as sqlp
-import ferdinand.image_procs as imgp
+import ferdinand.sqlite_utils as sqlutl
+import ferdinand.image_utils as imgutl
 import ferdinand.utils as utl
 import ferdinand.preprocess_and_qc as ppqc
 
@@ -24,21 +23,21 @@ def preprocess_image_from_BCM(image):
 
     methods_used = []
 
-    preproc_img, method_name = imgp.apply_gaussian_blur(image)
+    preproc_img, method_name = imgutl.apply_gaussian_blur(image)
     methods_used.append(method_name)
 
-    preproc_img, method_name = imgp.apply_edge_enhancement(preproc_img.copy())
+    preproc_img, method_name = imgutl.apply_edge_enhancement(preproc_img.copy())
     methods_used.append(method_name)
 
-    preproc_img, method_name = imgp.crop_image_from_right(preproc_img.copy())
+    preproc_img, method_name = imgutl.crop_image_from_right(preproc_img.copy())
     methods_used.append(method_name)
 
-    is_inverted = imgp.detect_image_inversion(preproc_img)
+    is_inverted = imgutl.detect_image_inversion(preproc_img)
     if is_inverted:
-        preproc_img, method_name = imgp.invert_image(preproc_img.copy())
+        preproc_img, method_name = imgutl.invert_image(preproc_img.copy())
         methods_used.append(method_name)
 
-    preproc_img, method_name = imgp.apply_clahe(preproc_img.copy())
+    preproc_img, method_name = imgutl.apply_clahe(preproc_img.copy())
     methods_used.append(method_name)
 
     return preproc_img, methods_used
@@ -52,20 +51,13 @@ def preprocess_image_from_HMGU(image):
     methods_used = []
     # kernel_setting_value = 1
 
-    preproc_img, method_name = imgp.apply_gaussian_blur(image)
+    preproc_img, method_name = imgutl.apply_gaussian_blur(image)
     methods_used.append(method_name)
 
-    preproc_img, method_name = imgp.apply_edge_enhancement(preproc_img.copy())
+    preproc_img, method_name = imgutl.apply_edge_enhancement(preproc_img.copy())
     methods_used.append(method_name)
 
-    #is_inverted = imgproc.detect_image_inversion(preproc_img2)
-    #if is_inverted:
-    #    preproc_img3, method_name = imgproc.apply_morphological_operations(preproc_img2, kernel_size=kernel_setting_value)
-    #    methods_used.append(method_name)
-    #else:
-    #    preproc_img3 = preproc_img2
-
-    preproc_img, method_name = imgp.apply_clahe(preproc_img.copy())
+    preproc_img, method_name = imgutl.apply_clahe(preproc_img.copy())
     methods_used.append(method_name)
 
     return preproc_img, methods_used
@@ -85,20 +77,20 @@ def preprocess_image_from_ICS(image):
     """
     methods_used = []
 
-    preproc_img, method_name = imgp.apply_gaussian_blur(image)
+    preproc_img, method_name = imgutl.apply_gaussian_blur(image)
     methods_used.append(method_name)
 
-    preproc_img, method_name = imgp.apply_edge_enhancement(preproc_img.copy())
+    preproc_img, method_name = imgutl.apply_edge_enhancement(preproc_img.copy())
     methods_used.append(method_name)
 
-    is_inverted = imgp.detect_image_inversion(preproc_img.copy())
+    is_inverted = imgutl.detect_image_inversion(preproc_img.copy())
     if is_inverted:
-        preproc_img, method_name = imgp.crop_image_from_top(preproc_img.copy())
+        preproc_img, method_name = imgutl.crop_image_from_top(preproc_img.copy())
         methods_used.append(method_name)
-        preproc_img, method_name = imgp.invert_image(preproc_img.copy())
+        preproc_img, method_name = imgutl.invert_image(preproc_img.copy())
         methods_used.append(method_name)
 
-    preproc_img, method_name = imgp.apply_clahe(preproc_img.copy())
+    preproc_img, method_name = imgutl.apply_clahe(preproc_img.copy())
     methods_used.append(method_name)
 
     return preproc_img, methods_used
@@ -117,13 +109,13 @@ def _standard_preprocess_image_from_center(image):
 
     methods_used = []
 
-    preproc_img, method_name = imgp.apply_gaussian_blur(image)
+    preproc_img, method_name = imgutl.apply_gaussian_blur(image)
     methods_used.append(method_name)
 
-    preproc_img, method_name = imgp.apply_edge_enhancement(preproc_img.copy())
+    preproc_img, method_name = imgutl.apply_edge_enhancement(preproc_img.copy())
     methods_used.append(method_name)
 
-    preproc_img, method_name = imgp.apply_clahe(preproc_img.copy())
+    preproc_img, method_name = imgutl.apply_clahe(preproc_img.copy())
     methods_used.append(method_name)
 
     return preproc_img, methods_used
@@ -173,24 +165,24 @@ def preprocess_image_from_MRC_Harwell(image):
     """
     methods_used = []
 
-    average_brightness, median_brightness = imgp.analyze_center_brightness(image)
+    average_brightness, median_brightness = imgutl.analyze_center_brightness(image)
 
-    preproc_img, method_name = imgp.apply_gaussian_blur(image)
+    preproc_img, method_name = imgutl.apply_gaussian_blur(image)
     methods_used.append(method_name)
 
-    preproc_img, method_name = imgp.apply_edge_enhancement(preproc_img.copy())
+    preproc_img, method_name = imgutl.apply_edge_enhancement(preproc_img.copy())
     methods_used.append(method_name)
 
     if average_brightness > 200:
         threshold=100
-        preproc_img, method_name = imgp.remove_marker(preproc_img.copy(), threshold=threshold)
+        preproc_img, method_name = imgutl.remove_marker(preproc_img.copy(), threshold=threshold)
         methods_used.append(method_name)
     elif 200 > average_brightness > 120:
         threshold=60
-        preproc_img, method_name = imgp.remove_marker(preproc_img.copy(), threshold=threshold)
+        preproc_img, method_name = imgutl.remove_marker(preproc_img.copy(), threshold=threshold)
         methods_used.append(method_name)
 
-    preproc_img, method_name = imgp.apply_clahe(preproc_img.copy())
+    preproc_img, method_name = imgutl.apply_clahe(preproc_img.copy())
     methods_used.append(method_name)
 
     return preproc_img, methods_used
@@ -217,24 +209,21 @@ def preprocess_image_from_TCP(image):
     """
     methods_used = []
 
-    average_brightness, median_brightness = imgp.analyze_center_brightness(image)
+    average_brightness, median_brightness = imgutl.analyze_center_brightness(image)
 
-    preproc_img, method_name = imgp.apply_gaussian_blur(image)
+    preproc_img, method_name = imgutl.apply_gaussian_blur(image)
     methods_used.append(method_name)
 
-    preproc_img, method_name = imgp.apply_edge_enhancement(preproc_img.copy())
+    preproc_img, method_name = imgutl.apply_edge_enhancement(preproc_img.copy())
     methods_used.append(method_name)
 
     if average_brightness > 220:
         kernel_size = 1
 
-        #preproc_img3, method_name=imgproc.apply_morphological_operations(preproc_img2, kernel_size=kernel_size)
-        #methods_used.append(method_name)
-
-        preproc_img, method_name = imgp.crop_image_from_right(preproc_img.copy())
+        preproc_img, method_name = imgutl.crop_image_from_right(preproc_img.copy())
         methods_used.append(method_name)
 
-    preproc_img, method_name = imgp.apply_clahe(preproc_img.copy())
+    preproc_img, method_name = imgutl.apply_clahe(preproc_img.copy())
     methods_used.append(method_name)
 
     return preproc_img, methods_used
@@ -254,23 +243,23 @@ def preprocess_image_from_UC_Davis(image):
     """
     methods_used = []
 
-    average_brightness, median_brightness = imgp.analyze_center_brightness(image)
+    average_brightness, median_brightness = imgutl.analyze_center_brightness(image)
 
-    preproc_img, method_name = imgp.apply_gaussian_blur(image)
+    preproc_img, method_name = imgutl.apply_gaussian_blur(image)
     methods_used.append(method_name)
 
-    preproc_img, method_name = imgp.apply_edge_enhancement(preproc_img.copy())
+    preproc_img, method_name = imgutl.apply_edge_enhancement(preproc_img.copy())
     methods_used.append(method_name)
 
     if average_brightness < 150:
-        preproc_img, method_name = imgp.apply_brightness(preproc_img.copy(), target_brightness=80)
+        preproc_img, method_name = imgutl.apply_brightness(preproc_img.copy(), target_brightness=80)
         methods_used.append(method_name)
     #elif average_brightness > 200:
     #    kernel_setting_value = 1
-    #    preproc_img3, method_name = imgproc.apply_morphological_operations(preproc_img2, kernel_setting_value)
+    #    preproc_img3, method_name = imguroc.apply_morphological_operations(preproc_img2, kernel_setting_value)
     #    methods_used.append(method_name)
 
-    preproc_img, method_name = imgp.apply_clahe(preproc_img.copy())
+    preproc_img, method_name = imgutl.apply_clahe(preproc_img.copy())
     methods_used.append(method_name)
 
     return preproc_img, methods_used
@@ -337,7 +326,7 @@ def preprocess_image(conn, db_table, center, image_file_path, source_path, targe
 
     if pad_to_square:
         # pad to square, if defined
-        preproc_image = imgp.pad_image_to_square(preproc_image.copy())
+        preproc_image = imgutl.pad_image_to_square(preproc_image.copy())
     
     # save the pre-processed image
     if preproc_image is None:
@@ -349,7 +338,7 @@ def preprocess_image(conn, db_table, center, image_file_path, source_path, targe
         if logger is not None:
             logger.debug(f"pre-processed image saved to: {preproc_file_path}")
         if conn is not None:
-            sqlp.update_preprocess_status(conn=conn, 
+            sqlutl.update_preprocess_status(conn=conn, 
                                          db_table=db_table, 
                                          status='yes', 
                                          omero_id=os.path.splitext(os.path.basename(image_file_path))[0], 

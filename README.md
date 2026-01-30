@@ -6,9 +6,9 @@ An open framework for access and AI-ready preprocessing of IMPC 2D radiographs.
 
 FERDINAnD provides an end-to-end pipeline to fetch, curate, preprocess and prepare 2D radiograph image data from the IMPC for downstream AI workflows. It focuses on:
 
-- Automated data acquisition (IMPC Solr image API) and per-center CSV collection (`notebooks/010_fetch_data_from_impc.ipynb`).
-- Robust image download and metadata extraction (`notebooks/020_download_impc_radiographs.ipynb`, `src/ferdinand/download_procs.py`).
-- Per-center, center-specific preprocessing tuned for different data sources and QC (`notebooks/030_preprocess_dataset.ipynb`, `src/ferdinand/preprocess_and_qc.py`, `src/ferdinand/image_procs.py`).
+- Automated data acquisition (IMPC Solr image API) and per-center CSV collection (`notebooks/100_fetch_data_from_impc.ipynb`).
+- Robust image download and metadata extraction (`notebooks/020_download_impc_radiographs.ipynb`, `src/ferdinand/download_utils.py`).
+- Per-center, center-specific preprocessing tuned for different data sources and QC (`notebooks/300_preprocess_dataset.ipynb`, `src/ferdinand/preprocess_and_qc.py`, `src/ferdinand/image_utils.py`).
 - Light-weight metadata storage and bookkeeping via SQLite (`src/ferdinand/sqlite_procs.py`) so downstream steps can resume safely.
 
 See the `notebooks/` directory for runnable, documented pipeline steps and `src/ferdinand/` for the programmatic APIs used by the notebooks.

@@ -174,3 +174,4 @@ igraph
 leidenalg
 transformers
 timm
+umap-learn

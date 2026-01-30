@@ -3,7 +3,7 @@ import requests
 
 import pandas as pd
 
-from ferdinand.image_procs import detect_file_format, get_image_info
+from ferdinand.image_utils import detect_file_format, get_image_info
 
 IMPC_ORIGINAL_URL = 'https://www.ebi.ac.uk/mi/media/omero/webgateway/archived_files/download'
 IMPC_JPEG_URL = 'https://www.ebi.ac.uk/mi/media/omero/webgateway/render_image'
