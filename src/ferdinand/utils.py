@@ -318,8 +318,10 @@ def create_and_save_thumbnails(data: pd.DataFrame, centers: list,
 def create_thumbnail_gallery(data: pd.DataFrame, 
                              html_file_name: str, 
                              title: str, 
-                             thumbnails_dir: str, 
-                             source_dir: str):
+                             html_dir: str, 
+                             thumbnails_dir: str,
+                             source_dir: str, 
+                             alignment_details: bool = False):
     '''
     Creates an HTML gallery of thumbnail images grouped by center.
 
@@ -334,17 +336,18 @@ def create_thumbnail_gallery(data: pd.DataFrame,
     :param source_dir: location of the original images
     :type source_dir: str
     '''
-    html_file = os.path.join(thumbnails_dir, html_file_name)
+    html_file = os.path.join(html_dir, html_file_name)
+    print(f"Creating thumbnail gallery at: {html_file}")
 
     # path relative to the thumbnails directory
-    source_dir = os.path.join('..', os.path.basename(source_dir))
+    # source_dir = os.path.join('..', os.path.basename(source_dir))
 
     with open(html_file, "w") as f:
         f.write(f"<html><body><h2>{title}</h2>")
         for center in data['center'].unique():
             _df = data[data['center'] == center].copy()
             total = len(_df)
-            if 'snd_angle_prediction' in _df.columns:
+            if alignment_details:
                 _df.sort_values(by='snd_angle_prediction', inplace=True)
                 aligned = len(_df[(_df['snd_angle_prediction'] < 10) | (_df['snd_angle_prediction'] > 350)])
                 f.write(f"<h3>Center: {center} ({int((aligned/total)*100) if total > 0 else 0}% aligned)</h3></br>")
@@ -354,10 +357,12 @@ def create_thumbnail_gallery(data: pd.DataFrame,
             for idx, row in _df.iterrows():
                 orig_file = os.path.join(build_local_image_dir(source_dir, row['center'], row['cohort_type'], row['gene_symbol'], row['sex']), 
                                          f"{row['omero_id']}.jpg")
-                thumb_file = os.path.join(build_local_image_dir('.', row['center'], row['cohort_type'], row['gene_symbol'], row['sex']), 
+                orig_file = os.path.relpath(orig_file, html_dir)
+                thumb_file = os.path.join(build_local_image_dir(thumbnails_dir, row['center'], row['cohort_type'], row['gene_symbol'], row['sex']), 
                                           f"{row['omero_id']}.jpg")
+                thumb_file = os.path.relpath(thumb_file, html_dir)
                 # f.write(f'<a href="{orig_file}"><img src="{thumb_file}" width="128" ></a> ')
-                if {'fst_angle_prediction', 'snd_angle_prediction'}.issubset(_df.columns):
+                if alignment_details:
                     f.write(f'''
                             <div style="display:inline-block; text-align:center;">
                             <a href="{orig_file}"><img src="{thumb_file}" width="128"></a><br>
