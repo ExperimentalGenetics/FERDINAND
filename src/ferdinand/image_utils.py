@@ -573,6 +573,78 @@ def apply_brightness(image, target_brightness=20):
 
     return adjusted_image,method_name
 
+def rotate_image(image, angle, border_width=None, background_color=None):
+    """
+    Rotates an image by a specified angle while preserving the entire image content.
+    
+    :param image: The input image to be rotated (NumPy array).
+    :param angle: The rotation angle in degrees. Positive values rotate the image counter-clockwise.
+    :param border_width: Number of pixels to use from the borders to calculate the background color. If None, defaults to 10.
+    :param background_color: The color to fill the areas outside the original image. If None, it is calculated from the image borders.
+    
+    :return: The rotated image with preserved content and filled background (NumPy array).
+    """
+    if background_color is None:
+        background_color = measure_image_border_color(image, border_width=border_width)
+
+    # Don't convert grayscale images to BGR, keep them as they are
+    if image.ndim == 2:  # grayscale image  
+        channels = 1
+    else:  # RGB or color image
+        channels = 3
+
+    h, w = image.shape[:2]
+    
+    # rotated
+    max_side = max(h, w)
+
+    center = (max_side // 2, max_side // 2)
+
+    M = cv2.getRotationMatrix2D(center, angle, 1.0)
+    result = cv2.warpAffine(image, M, (max_side, max_side), 
+                             flags=cv2.INTER_LINEAR, 
+                             borderMode=cv2.BORDER_CONSTANT,
+                             borderValue=background_color) 
+    
+    return result
+
+def measure_image_border_color(image, border_width=10):
+    """
+    Measures the average color of the borders of an image to determine a suitable background color for padding or filling.
+    
+    :param image: The input image as a NumPy array (grayscale or color).
+    :param border_width: The width of the border area to consider for color measurement (default: 10 pixels).
+    
+    :return: The average color of the borders as a NumPy array (for color images) or an integer (for grayscale images).
+    """
+    h, w = image.shape[:2]
+
+    # extract border regions
+    top_border = image[:border_width, :]  # oberer Rand
+    bottom_border = image[-border_width:, :]  # unterer Rand
+    left_border = image[:, :border_width]  # linker Rand
+    right_border = image[:, -border_width:]  # rechter Rand
+
+    # first combine the top and bottom borders along the height (axis 0)
+    top_bottom_border = np.concatenate([top_border, bottom_border], axis=0)
+
+    # then combine the left and right borders along the width (axis 1)
+    left_right_border = np.concatenate([left_border, right_border], axis=1)
+
+    # combine all border pixels for the final average color calculation
+    if image.ndim == 3:  # color image
+        border_color = np.mean(np.concatenate([top_bottom_border, left_right_border], axis=None), axis=0).astype(np.uint8)
+        return border_color
+    elif image.ndim == 2:  # grayscale image
+        # mean value of the top and bottom borders
+        mean_top_bottom = np.mean(top_bottom_border)
+        # mean value of the left and right borders
+        mean_left_right = np.mean(left_right_border)
+        # average of both means to account for border_width influence correctly
+        border_color = (mean_top_bottom + mean_left_right) / 2
+        return int(border_color)
+    else:
+        raise ValueError("Unexpected image format")
 
 def analyze_maus_brightness_median(image, bright_pixel_threshold=200, dark_pixel_threshold=20, median_threshold=180, bright_ratio_threshold=50):
     """
@@ -650,3 +722,30 @@ def detect_global_overexposure(image, bg_thresh=150, obj_thresh=160):
         return True
 
     return False
+
+def binarize_images(x, threshold=0.4, logger=None):
+    """
+    Normalizes and binarizes an image or a batch of images.
+    
+    :param x: Input image or batch of images as a NumPy array with pixel values in the range [0, 255].
+    :param threshold: Threshold value for binarization (default: 0.4).
+    :param logger: Logger object for logging messages (default: None).
+
+    :return: Binarized image or batch of images as a NumPy array with pixel values of 0 or 1.
+    """
+
+    # Ensure the input is a NumPy array
+    if not isinstance(x, np.ndarray):
+        raise ValueError("Input must be a NumPy array.")
+
+    # Ensure the values are in the expected range [0, 255]
+    if np.any(x < 0) or np.any(x > 255):
+        raise ValueError("Input array must contain pixel values in the range [0, 255].")
+
+    # Normalize pixel values to the range [0, 1]
+    x = x / 255.0
+
+    # Binarize the image: pixels >= threshold become 1, and pixels < threshold become 0
+    x = np.where(x >= threshold, 1, 0)
+
+    return x

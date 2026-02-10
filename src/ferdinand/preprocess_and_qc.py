@@ -424,3 +424,199 @@ def flag_overexposed_images(conn, db_table, rows: pd.DataFrame, source_path, log
                                          value='yes' if val else 'no',
                                          condition_column='omero_id',
                                          condition_value=row['omero_id'])
+                
+def predict_orientation_angle(conn, db_table, model, image_file_path, db_column_name, 
+                              preproc_func=imgutl.binarize_images, image=None):
+    """
+    Predicts the orientation angle of an image using a pre-trained model and updates the database with the predicted angle.
+    
+    :param conn: Active sqlite connection object.
+    :param model: Loaded model used for angle prediction.
+    :param image_file_path: Full path to the image file to be processed.
+    :param db_column_name: Name of the database column to store the predicted angle.
+    :param db_table: Name of the database table to update.
+    :param preproc_func: Function for preprocessing the image before prediction (default: imgproc.binarize_images).
+    :param image: Optional pre-loaded image data. If not provided, the image will be read from the file path.
+    :return: Predicted angle of the image
+    """
+
+    # Load the image in grayscale
+    if image is None:
+        image = cv2.imread(image_file_path, cv2.IMREAD_GRAYSCALE)
+        if image is None:
+            raise FileNotFoundError(f"Image not found at path: {image_file_path}")
+
+    # Resize the image for the model
+    resized_image_as_array = imgutl.resize_image_to_array(image_file_path=image_file_path, img=image)
+
+    if preproc_func is not None:
+        resized_image_as_array = preproc_func(resized_image_as_array)
+
+    predict = model.predict(np.array(resized_image_as_array))
+    predicted_angle = np.argmax(predict, axis=1).item()
+
+    # Extract Omero ID from the file name
+    image_file_name = os.path.basename(image_file_path)
+    omero_id, _ = os.path.splitext(image_file_name)
+
+    mouse_id = None
+    if conn is not None:
+        # Retrieve image metadata from the SQLite database
+        samples = sqlutl.select_rows_by_column(conn=conn, 
+                                            db_table=db_table, 
+                                            column='omero_id',
+                                            value=int(omero_id))
+        if len(samples) != 1:
+            raise ValueError(f"Expected exactly one row in the database for image with Omero ID {omero_id}, "
+                             f"but found {len(samples)}.")
+
+        # Extract mouse ID from the database sample
+        mouse_id = samples["mouse_id"].item()
+
+        if db_column_name is not None:
+            sqlutl.add_column_to_table(conn, db_table, db_column_name, 'INTEGER')
+            rows_updated = sqlutl.update_column_values(conn=conn, 
+                                                      db_table=db_table,
+                                                      column=db_column_name,
+                                                      value=int(predicted_angle),
+                                                      condition_column='omero_id',
+                                                      condition_value=int(omero_id))
+            if rows_updated == 0:
+                print("No rows updated — check omero_id/mouse_id")
+
+    print(f"Omero ID: {omero_id}, Mouse ID: {mouse_id}, Predicted orientation angle: {predicted_angle}")
+
+    return predicted_angle
+
+def predict_rotation_angle(predicted_orientation_angle, logger=None):
+    """
+    Predicts the rotation angle needed to correct the image orientation based on the predicted orientation angle.
+    
+    :param predicted_orientation_angle: The predicted orientation angle of the image (in degrees).
+    :param logger: Logger object for logging messages (default: None).
+    
+    :return: The angle difference (in degrees) needed to rotate the image to the correct orientation.
+    """
+    predicted_rotation_angle = (-predicted_orientation_angle)%360
+
+    if logger is not None:
+        logger.debug(f"Predicted orientation angle: {predicted_orientation_angle}")
+        logger.debug(f"Predicted rotation angle: {predicted_rotation_angle}")   
+
+    return predicted_rotation_angle
+
+def load_and_rotate_image(conn, db_table, image_file, source_path, target_path, logger=None):
+    """
+    Loads an image, predicts its orientation angle using a pre-trained model, rotates the image accordingly, and saves the rotated image to the target path. 
+    The function also updates the database with the rotation status and new image dimensions.
+    
+    :param conn: Active sqlite connection object.
+    :param db_table: Name of the database table to update.
+    :param image_file: Name of the image file to be processed.
+    :param source_path: Path to the source directory where the image is located.
+
+    :param target_path: Description
+    :param logger: Description
+    
+    :return: tuple (rotated_file_path, rotated_image, rotation_angle)
+        - rotated_file_path (str): The file path where the rotated image is saved.
+        - rotated_image (ndarray): The rotated image after applying the rotation correction.
+        - rotation_angle (float): The angle difference (in degrees) used to rotate the image
+    """
+    
+    omero_id = os.path.splitext(os.path.basename(image_file))[0]
+
+    # image_file_path = os.path.join(source_path, image_file)
+    image = cv2.imread(image_file, cv2.IMREAD_GRAYSCALE)
+    if image is None:
+        raise FileNotFoundError(f"ERROR: Image not found at {image_file}!")
+
+
+    orientation_angle = sqlutl.get_value_by_id(column='fst_angle_prediction', 
+                                               omero_id=omero_id, 
+                                               conn=conn, 
+                                               db_table=db_table)
+    if orientation_angle is None:
+        raise ValueError(f"ERROR: No predicted angle found for image with Omero ID {omero_id}!")
+    
+    rotation_angle = predict_rotation_angle(orientation_angle, logger=logger)
+
+    h, w = image.shape[:2]
+
+    border_thickness = int(min(h, w) * 0.10)
+    # print(border_thickness)
+    top_strip = image[:border_thickness, :]
+    bottom_strip = image[-border_thickness:, :]
+    left_strip = image[:, :border_thickness]
+    right_strip = image[:, -border_thickness:]
+
+    border_pixels = np.concatenate([
+        top_strip.reshape(-1, 2),
+        bottom_strip.reshape(-1, 2),
+        left_strip.reshape(-1, 2),
+        right_strip.reshape(-1, 2)
+    ], axis=0)
+
+    mean_color = border_pixels.mean(axis=0).astype(np.uint8)
+
+    rotated_image = imgutl.rotate_image(image, rotation_angle, background_color=mean_color.tolist())
+
+    column = 'rotated'
+    sqlutl.add_column_to_table(conn, db_table, column, 'TEXT', default_value='no')
+    if rotated_image is not None:
+
+        if source_path in os.path.dirname(image_file) and target_path is not None:
+            os.makedirs(target_path, exist_ok=True)
+            rotated_file_path = image_file.replace(source_path, target_path)
+            os.makedirs(os.path.dirname(rotated_file_path), exist_ok=True)
+        else: 
+            raise ValueError(f"ERROR: image_path {source_path} not found in image_file {image_file} or {target_path} is not valid!")
+
+        success = cv2.imwrite(str(rotated_file_path), rotated_image)
+        if not success:
+            raise IOError(f"Failed to write rotated image: {rotated_file_path}")
+        else:
+            if logger is not None:
+                logger.debug(f"rotated image saved to: {rotated_file_path}")
+            sqlutl.update_rotate_status(conn=conn, 
+                                        db_table=db_table,
+                                        status='yes', 
+                                        omero_id=omero_id, 
+                                        img_height=rotated_image.shape[0],
+                                        img_width=rotated_image.shape[1],
+                                        logger=logger)
+              
+
+    return rotated_file_path, rotated_image, rotation_angle
+
+def load_and_rotate_images(conn, db_table, image_files, source_path, target_path, 
+                           logger=None, no_of_images_to_show=5):
+    """
+    Processes and rotates a list of images based on predicted rotation angles, and stores them in the archive.
+    
+    :param conn: Active sqlite connection object.
+    :param image_files: List of image file paths to be processed.
+    :param source_path: Path to locally saved images.
+    :param target_path: Path to where the processed images are locally stored.
+    :param logger: Logger object for logging messages (default: None).
+    
+    :return: List of file paths to the rotated images.
+    """
+
+    rotated_img_files = []
+    for img_file in image_files:
+        try: 
+            rotated_img_file, rotated_image, rotation_angle = load_and_rotate_image(conn=conn, 
+                                                                                    db_table=db_table,
+                                                                                    image_file=img_file, 
+                                                                                    source_path=source_path,
+                                                                                    target_path=target_path, 
+                                                                                    logger=logger)
+            rotated_img_files.append(rotated_img_file)
+        except (FileNotFoundError, ValueError, IOError) as e: 
+            logger.error(f"could not preprocess image {img_file}: {e}")
+            continue
+    if no_of_images_to_show > 0 and len(rotated_img_files) > 0:  
+        utl.plot_image_grid(image_files=rotated_img_files[:no_of_images_to_show], cols=5)
+
+    return rotated_img_files

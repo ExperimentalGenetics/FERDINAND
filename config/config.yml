@@ -63,3 +63,5 @@ directories:
   preprocessed_thumbnails_dir: "310_preprocessed_thumbnails"
   rotated_dir: "400_rotated_images"
   rotated_thumbnails_dir: "410_rotated_thumbnails"
+
+angle_detection_model: "2024-09-09_angle_detection_model.h5"

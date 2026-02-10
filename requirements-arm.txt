@@ -175,3 +175,4 @@ leidenalg
 transformers
 timm
 umap-learn
+ipynbname

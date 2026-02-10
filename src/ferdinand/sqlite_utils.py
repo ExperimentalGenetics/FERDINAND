@@ -94,57 +94,44 @@ def select_rows(conn, db_table, center=None, logger=None):
         raise
 
 def select_rows_by_column(conn, db_table, column, value, logger=None):
+    return select_rows_by_columns(conn, db_table, filters={column: value})  
+
+def select_rows_by_columns(conn, db_table, filters: dict):
     """
-    Query a SQL table for rows where the given column matches a value, or is NULL if value is None.
+    Select rows from a SQL table based on multiple column-value pairs. If a value is None, selects rows where the column IS NULL.
     
     :param conn: active sqlite3 connection to database
     :param db_table: name of the table to query
-    :param column: name of the column to filter by (validated against table schema)
-    :param value: value to match in the specified column (None for IS NULL check)
-    :param logger: optional logger instance for logging results
+    :param filters: dictionary of column-value pairs to filter by (value can be None for IS NULL check)
+    :type filters: dict
     :return: pandas.DataFrame with the queried records
     """
+    # Check which column exists
+    table_info = pd.read_sql_query(f"PRAGMA table_info({db_table})", conn)
+    valid_columns = set(table_info["name"].tolist())
+
+    invalid_columns = [col for col in filters.keys() if col not in valid_columns]
+    if invalid_columns:
+        raise ValueError(
+            f"Invalid column(s): {invalid_columns}. "
+            f"Available columns are: {sorted(valid_columns)}"
+        )
     
-    # Validate table name
-    if not db_table.replace('_', '').isalnum():
-        raise ValueError(f"Invalid table name: {db_table}")
-    
-    # Validate column name - must be alphanumeric or underscore
-    if not column.replace('_', '').isalnum():
-        raise ValueError(f"Invalid column name: {column}")
-    
-    # Verify column exists in table
-    try:
-        table_info = pd.read_sql_query(f"PRAGMA table_info({db_table})", conn)
-        columns = table_info['name'].tolist()
-        
-        if column not in columns:
-            raise ValueError(f"Column '{column}' does not exist in table '{db_table}'. "
-                           f"Available columns: {columns}")
-    except sqlite3.Error as e:
-        if logger is not None:
-            logger.error(f"Error validating column '{column}' in table '{db_table}': {e}")
-        raise
-    
-    try:
-        # Build and execute query
-        if value is None:
-            query = f"SELECT * FROM {db_table} WHERE {column} IS NULL"
-            df_result = pd.read_sql_query(query, conn)
-            if logger is not None:
-                logger.info(f"Retrieved {len(df_result)} records from {db_table} where {column} IS NULL")
+    # Build WHERE clause
+    conditions = []
+    params = []
+
+    for col, val in filters.items():
+        if val is None:
+            conditions.append(f"{col} IS NULL")
         else:
-            query = f"SELECT * FROM {db_table} WHERE {column} = ?"
-            df_result = pd.read_sql_query(query, conn, params=(value,))
-            if logger is not None:
-                logger.info(f"Retrieved {len(df_result)} records from {db_table} where {column} = '{value}'")
-        
-        return df_result
-    
-    except sqlite3.Error as e:
-        if logger is not None:
-            logger.error(f"Error querying {db_table} by column '{column}': {e}")
-        raise
+            conditions.append(f"{col} = ?")
+            params.append(val)
+
+    where_clause = " AND ".join(conditions) if conditions else "1=1"
+    query = f"SELECT * FROM {db_table} WHERE {where_clause}"
+
+    return pd.read_sql_query(query, conn, params=params)
 
 def select_random_rows_by_column(conn, db_table, num_rows: int, column, value, center=None, logger=None):
     """
@@ -424,6 +411,8 @@ def update_column_values(conn, db_table, column, value, condition_column, condit
     :param condition_column: name of the column to use in the WHERE clause
     :param condition_value: value to match in the condition column
     :param table_name: name of the table to update
+
+    :return: int - number of rows affected by the update
     """
     update = f"""
              UPDATE {db_table}
@@ -435,6 +424,8 @@ def update_column_values(conn, db_table, column, value, condition_column, condit
     cursor = conn.cursor()
     cursor.execute(update, params)
     conn.commit()
+
+    return cursor.rowcount  # Return the number of rows affected by the update
 
 def update_preprocess_status(conn, db_table, status, omero_id, preproc_methods, img_height, img_width,
                              logger=None):
@@ -482,6 +473,43 @@ def update_preprocess_status(conn, db_table, status, omero_id, preproc_methods, 
             cursor.execute(update_method, params)
             conn.commit()
 
+def update_rotate_status(conn, db_table, status, omero_id, img_height, img_width, logger=None):
+    """
+    Update the database table with information about an image rotation status. This function executes an SQL UPDATE on the table
+    to record the latest rotation status for the given image.
+    
+    :param conn: active sqlite3 connection to database
+    :param status: status of the image rotation
+    :param omero_id: OMERO image ID associated with the image
+    :param img_height: height of the rotated image in pixels
+    :param img_width: width of the rotated image in pixels
+    :param table_name: name of the table to update
+     :param logger: optional logger instance for logging results
+    """
+    colname = 'rotated'
+    add_column_to_table(conn, db_table, colname, "TEXT", logger=logger)
+    update = f"""
+             UPDATE {db_table}
+             SET    {colname}=?
+             WHERE  omero_id=? \
+             """
+    params = (status, omero_id)
+    cursor = conn.cursor()
+    cursor.execute(update, params)
+    conn.commit()
+    
+    img_dims = {'rotated_height': img_height, 'rotated_width': img_width}
+    for col, value in img_dims.items():
+        add_column_to_table(conn, db_table, col, "INTEGER", logger=logger)
+        update_dims = f"""
+                       UPDATE {db_table} 
+                       SET    {col}=? 
+                       WHERE  omero_id=? \
+                       """
+        params = (value, omero_id,)
+        cursor.execute(update_dims, params)
+        conn.commit()
+
 def add_column_to_table(conn, db_table, column_name, column_type, default_value=None, logger=None):
     """
     Add a new column to an existing SQLite table if it does not already exist.
@@ -505,3 +533,27 @@ def add_column_to_table(conn, db_table, column_name, column_type, default_value=
             logger.info(f" Added column '{column_name}' ({column_type}) to table '{db_table}'")
 
     conn.commit()
+
+def get_value_by_id(column, omero_id, conn, db_table):
+    """
+    Retrieve a specific value from the database table based on the OMERO ID.
+    
+    :param conn: active sqlite3 connection to database
+    :param column: name of the column to retrieve
+    :param omero_id: OMERO image ID associated with the image
+    :param table_name: name of the database table
+    
+    :return: The value from the specified column for the given OMERO ID, or None if not found.
+    """
+    query = f"""
+            SELECT {column} 
+            FROM   {db_table}
+            WHERE  omero_id=?
+            """
+
+    params = (omero_id,)
+    cursor = conn.cursor()
+    cursor.execute(query, params)
+    result = cursor.fetchone()
+
+    return result[0] if result else None

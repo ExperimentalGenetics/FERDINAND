@@ -130,19 +130,21 @@ def select_jpegs(conn, db_table, image_path, center=None):
     return selected_images
 
 def select_jpegs_by_column(conn, db_table, column, value, source_path):
+    return select_jpegs_by_columns(conn, db_table, filters={column: value}, source_path=source_path)
+
+def select_jpegs_by_columns(conn, db_table, filters: dict, source_path): 
     """
-    Selects images from the database where a specific column matches a given value and returns their file paths.
+    Selects images from the database where specific columns match given values and returns their file paths.
+    
     :param conn: Active sqlite connection.
-    :param column: Column name to filter by.
-    :param value: Value to match in the specified column.
+    :param filters: Dictionary of column-value pairs to filter by.
     :param source_path: Base path to the images.
     :return: List of file paths to the selected images.
-    """
+    """    
     try: 
-        df_rows = sqlutl.select_rows_by_column(conn=conn, 
-                                            db_table=db_table,
-                                            column=column,
-                                            value=value)
+        df_rows = sqlutl.select_rows_by_columns(conn=conn, 
+                                                db_table=db_table,
+                                                filters=filters)
     except ValueError as e: 
         print(f"{e}\n")
         return []
