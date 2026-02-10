@@ -146,22 +146,28 @@ def select_rows_by_column(conn, db_table, column, value, logger=None):
             logger.error(f"Error querying {db_table} by column '{column}': {e}")
         raise
 
-def select_random_rows_with_images(conn, db_table, num_rows: int, center=None):
+def select_random_rows_by_column(conn, db_table, num_rows: int, column, value, center=None, logger=None):
     """
-    Select random rows from the database table that have downloaded images, optionally filtered by center.
+    Select random rows from the database table where the specified column matches the given value, optionally filtered by center.
+    
     :param conn: active sqlite3 connection to database
+    :param db_table: name of the table to query
     :param num_rows: number of random rows to select
+    :type num_rows: int
+    :param column: name of the column to filter by (validated against table schema)
+    :param value: value to match in the specified column
     :param center: name of the center (optional)
-    :param table_name: name of the database table
-    :return: list of tuples: The selected rows.
+    :param logger: optional logger instance for logging results
+
+    :return: pandas.DataFrame with the randomly selected records
     """
     cursor = conn.cursor()
 
     if center is not None:
-        cursor.execute(f"SELECT COUNT(*) FROM {db_table} WHERE downloaded='yes' AND center=?", (center,))
+        cursor.execute(f"SELECT COUNT(*) FROM {db_table} WHERE {column}=? AND center=?", (value, center))
         total_rows = cursor.fetchone()[0]
     else:
-        cursor.execute(f"SELECT COUNT(*) FROM {db_table} WHERE downloaded='yes';")
+        cursor.execute(f"SELECT COUNT(*) FROM {db_table} WHERE {column}=?", (value,))
         total_rows = cursor.fetchone()[0]
 
     selected_rows = []
@@ -170,9 +176,9 @@ def select_random_rows_with_images(conn, db_table, num_rows: int, center=None):
 
         for off in offsets:
             if center is not None:
-                cursor.execute(f"SELECT * FROM {db_table} WHERE downloaded='yes' AND center=? LIMIT 1 OFFSET ?", (center, off))
+                cursor.execute(f"SELECT * FROM {db_table} WHERE {column}=? AND center=? LIMIT 1 OFFSET ?", (value, center, off))
             else:
-                cursor.execute(f"SELECT * FROM {db_table} WHERE downloaded='yes' LIMIT 1 OFFSET ?", (off,))
+                cursor.execute(f"SELECT * FROM {db_table} WHERE {column}=? LIMIT 1 OFFSET ?", (value, off))
             row = cursor.fetchone()
             if row:
                 selected_rows.append(row)
@@ -183,6 +189,9 @@ def select_random_rows_with_images(conn, db_table, num_rows: int, center=None):
     # build DataFrame
     df = pd.DataFrame(selected_rows, columns=col_names)
     return df
+
+def select_random_rows_with_images(conn, db_table, num_rows: int, center=None):
+    return select_random_rows_by_column(conn, db_table, num_rows=num_rows, column='downloaded', value='yes', center=center)
 
 def select_next_download_batch(conn, db_table, limit, status_column="downloaded", status_value="yes", order_by="center", logger=None):
     """

@@ -381,3 +381,46 @@ def preprocess_images(conn, db_table, center, image_files, source_path, target_p
         utl.plot_image_grid(image_files=preproc_img_files[:no_of_images_to_show], cols=5)
 
     return preproc_img_files
+
+def flag_overexposed_images(conn, db_table, rows: pd.DataFrame, source_path, logger=None): 
+
+    """
+    Flags images as overexposed based on brightness analysis and updates the database accordingly.
+    
+    :param conn: Active sqlite connection object.
+    :param db_table: Name of the database table to update.
+    :param rows: DataFrame containing rows for which overexposure is to be flagged.
+    :type rows: pd.DataFrame
+    :param source_path: Path to the local image directory.
+    :param logger: Logger object for logging messages (default: None).
+    """
+
+    if not rows.empty:
+
+        _df = rows.copy()
+
+        for idx, row in _df.iterrows():
+            image_file = os.path.join(utl.build_local_image_dir(source_path, row['center'], row['cohort_type'], row['gene_symbol'], row['sex']), 
+                                      f"{row['omero_id']}.jpg")
+        
+            image = cv2.imread(image_file)
+            if image is None: 
+                print(f"Warning: Could not read image at location: {image_file}")
+                continue
+        
+            is_object_too_bright = imgutl.analyze_maus_brightness_median(image)
+            is_overall_too_bright= imgutl.detect_global_overexposure(image)
+
+            for col, val in {'overexposed': is_object_too_bright, 
+                             'overall_overexposed': is_overall_too_bright}.items():
+                sqlutl.add_column_to_table(conn=conn, 
+                                        db_table=db_table, 
+                                        column_name=col,
+                                        column_type='TEXT', 
+                                        logger=logger)
+                sqlutl.update_column_values(conn=conn, 
+                                         db_table=db_table, 
+                                         column=col, 
+                                         value='yes' if val else 'no',
+                                         condition_column='omero_id',
+                                         condition_value=row['omero_id'])

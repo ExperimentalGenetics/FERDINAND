@@ -572,3 +572,81 @@ def apply_brightness(image, target_brightness=20):
     adjusted_image = np.clip(adjusted_image, 0, 255).astype(np.uint8)
 
     return adjusted_image,method_name
+
+
+def analyze_maus_brightness_median(image, bright_pixel_threshold=200, dark_pixel_threshold=20, median_threshold=180, bright_ratio_threshold=50):
+    """
+    Analyzes the brightness of a grayscale mouse image based on the median and ratio of bright pixels.
+
+    :param image: Input grayscale image of the mouse as a NumPy array.
+    :param bright_pixel_threshold: Threshold value for identifying bright pixels (default: 200).
+    :param dark_pixel_threshold: Threshold value for identifying dark pixels (default: 20).
+    :param median_threshold: Threshold value for the median brightness (default: 180).
+    :param bright_ratio_threshold: Threshold value for the ratio of bright pixels (default: 50).
+
+    :return: True if the image is considered too bright (overexposed), False otherwise.
+    """
+    
+    too_bright = False
+
+    # remove background (exclude very dark pixels)
+    non_zero_pixels = image[image > dark_pixel_threshold]
+
+    if non_zero_pixels.size == 0:
+        # print("No non-black pixels found in the image.")
+        return False
+
+    # compute statistics
+    median_val = np.median(non_zero_pixels)
+
+    # identify very bright pixels and calculate their ratio
+    bright_pixels = non_zero_pixels[non_zero_pixels > bright_pixel_threshold]
+    bright_ratio = len(bright_pixels) / len(non_zero_pixels) * 100
+
+    # heuristic overexposure criterion
+    if median_val > median_threshold and bright_ratio > bright_ratio_threshold:
+        # print("Overexposed!")
+        too_bright = True
+
+    return too_bright
+
+def detect_global_overexposure(image, bg_thresh=150, obj_thresh=160):
+    """
+    The function defines background and object regions based on a border around the image. 
+    It calculates the mean brightness of both regions and determines if the image is globally overexposed based on the specified thresholds.
+
+    :param image: Input image as a NumPy array (grayscale or color).
+    :param bg_thresh: Threshold value for background brightness.
+    :param obj_thresh: Threshold value for object brightness.
+
+    :return: True if the image is globally overexposed, False otherwise.    
+    """
+    if image.ndim == 3:
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    h, w = image.shape
+    border = int(0.15 * min(h, w))
+
+    # Masken definieren
+    bg_mask = np.zeros_like(image, dtype=bool)
+    bg_mask[:border, :] = True
+    bg_mask[-border:, :] = True
+    bg_mask[:, :border] = True
+    bg_mask[:, -border:] = True
+
+    obj_mask = ~bg_mask
+
+    bg_pixels = image[bg_mask]
+    obj_pixels = image[obj_mask]
+
+    mean_bg = np.mean(bg_pixels)
+    mean_obj = np.mean(obj_pixels)
+
+    if (
+        mean_bg > bg_thresh and
+        mean_obj > obj_thresh
+    ):
+        # print("Global overexposed!")
+        return True
+
+    return False
