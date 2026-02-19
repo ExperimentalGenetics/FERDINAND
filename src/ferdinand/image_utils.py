@@ -44,7 +44,7 @@ def detect_file_format(response):
 
     return "Unknown"
 
-def get_png_pixel_spacing(image_file):
+def get_png_pixel_spacing(image, logger=None):
 
     """
     Extract pixel_spacing_x and pixel_spacing_y from a metadata dictionary.
@@ -52,40 +52,49 @@ def get_png_pixel_spacing(image_file):
     Returns (pixel_spacing_x, pixel_spacing_y, manufacturer, manufacturer_model_name) or (None, None, None, None).
     """
 
-    try:
-        image = Image.open(image_file)
-        image.load()
-    except Exception as e:
-        print(f"Error loading image: {e}")
-        return None, None, None, None, None
+    # validate input type
+    if not isinstance(image, Image.Image):
+        error_msg = f"Expected PIL Image object, got {type(image).__name__}"
+        if logger:
+            logger.error(error_msg)
+        raise TypeError(error_msg)
     
+    # extract manufacturer metadata if available
     manufacturer = image.info.get('dcm:Manufacturer')
     manufacturer_model_name = image.info.get("dcm:Manufacturer'sModelName")
     
     spacing_keys = ['dcm:PixelSpacing', 'dcm:ImagerPixelSpacing']
 
     for key in spacing_keys:
-
         raw_spacing = image.info.get(key)
         
         if not raw_spacing:
             continue
             
         try:
+            # parse backslash-separated spacing values
             parts = raw_spacing.strip().split('\\')
             
             if len(parts) < 2:
+                if logger:
+                    logger.warning(f"Invalid spacing format in '{key}': expected at least 2 values, got {len(parts)}")
                 continue
-                
+
+            # convert to float (row spacing, column spacing)    
             pixel_spacing_y = float(parts[0])  # Row spacing
             pixel_spacing_x = float(parts[1])  # Column spacing
             
             return key, pixel_spacing_x, pixel_spacing_y, manufacturer, manufacturer_model_name
             
-        except (IndexError, ValueError) as e:
+        except (ValueError, TypeError) as e:
+            if logger:
+                logger.warning(f"Failed to parse '{key}': {e}")
             continue
 
     # If no valid key found or parsing failed
+    if logger:
+        logger.debug("No valid pixel spacing metadata found in image")
+    
     return None, None, None, manufacturer, manufacturer_model_name
 
 def get_image_info(image_file, response, logger=None):
@@ -155,7 +164,7 @@ def get_image_info(image_file, response, logger=None):
         info["color_scheme"] = image.mode
         info["dpi"] = str(image.info.get("dpi"))
         if image.format == 'PNG':
-            spacing_method, info["row_spacing"], info["col_spacing"], info["manufacturer"], info["manufacturer_model_name"] = get_png_pixel_spacing(image_file)
+            spacing_method, info["row_spacing"], info["col_spacing"], info["manufacturer"], info["manufacturer_model_name"] = get_png_pixel_spacing(image)
 
     return info
 
@@ -502,7 +511,7 @@ def pad_image_to_square(image, border_width=10):
 
     return image
 
-def resize_image_to_array(image_file_path, target_size=(150, 150), img=None):
+def resize_image_to_array(image_file_path, target_size, img=None):
     """
     Load an image from the given path, resize it, convert it to grayscale, and return it as a NumPy array.
 

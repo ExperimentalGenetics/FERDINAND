@@ -1,7 +1,11 @@
+import logging
 import os
+from types import SimpleNamespace
 import requests
 
 import pandas as pd
+
+from pathlib import Path
 
 from ferdinand.image_utils import detect_file_format, get_image_info
 
@@ -18,6 +22,302 @@ IMAGE_FILE_EXTENSION_MAP = {
     "BMP": "bmp",
     "TIFF": "tif"
 }
+
+def fetch_metadata(mode: str, my_centers: list, 
+                   my_parameters: pd.DataFrame, expected_df: pd.DataFrame, dirs: SimpleNamespace, 
+                   api_base_url: str, api_fields: str, api_options: str, logger):
+    """
+    Downloads metadata for specified parameters and centers from the IMPC API, saves to CSV files, and logs results.
+    
+    :param mode: Description (e.g., "TEST" for limited download, "REAL" for full download)
+    :param my_centers: List of phenotyping centers to download data from
+    :param my_parameters: DataFrame containing parameters (stable_id) to download metadata for
+    :param expected_df: DataFrame containing expected number of data points for each parameter and center
+    :param dirs: SimpleNamespace containing directory paths for raw data storage
+    :param api_base_url: Base URL for the IMPC API
+    :param api_fields: Fields to include in the API request
+    :param api_options: Additional options for the API request
+    :param logger: Logger instance for logging results
+    """
+    # loop over all parameters and centers and download the metadata
+    number_centers = len(my_centers)
+    for my_stable_id in my_parameters.stable_id:
+ 
+        logger.info(f"\n==================================================================================================================================")
+        logger.info(f"DOWNLOADING: {my_stable_id} from {str(number_centers)} centers") 
+        logger.info(f"==================================================================================================================================")
+
+        counter = 0
+    
+        # loop over all phenotyping centers
+        for my_center in my_centers:
+        
+            if my_center not in expected_df.columns:
+                continue
+
+            counter = counter + 1
+
+            # build file name
+            my_center_stripped = my_center.replace(" ", "_")
+            my_file = os.path.join(dirs.raw_data_dir, f"parameter-{my_stable_id}-{my_center_stripped}-raw_data.csv")
+            # build center filter
+            my_center_quoted   = '\"' + my_center + '\"'
+            my_center_filter = "&fq=phenotyping_center:" + my_center_quoted
+
+            # get expected number of data points
+            expected_data_points = expected_df[my_center][my_stable_id]
+
+            if mode=="TEST":
+                # in TEST mode, only download 20 rows of data
+                api_lines = '&rows=20'
+            else:
+                # dynamically set number of rows to download (expected + 100)
+                api_lines  = '&rows=' + str(expected_data_points + 10)
+
+            # build the URL from the components defined above
+            my_url = api_base_url + my_stable_id + my_center_filter + api_fields + api_lines + api_options
+        
+            logger.setLevel(logging.INFO)
+            logger.info(f"\n{str(counter)}. trying to download expected {expected_data_points} data points of {my_stable_id} from {my_center} using:\n{my_url}")
+
+            # replace whitespaces, e.g. in "MRC Harwell" and "UC Davis"
+            my_url_quoted = my_url.replace(" ", "%20")
+        
+            print(my_url_quoted)
+            response = requests.get(my_url_quoted)
+            response.raise_for_status()  # Fehler werfen, falls HTTP != 200
+
+            outfile = Path(my_file)
+            outfile.write_bytes(response.content)
+
+            # os.system(command_string)
+            with open(my_file) as f:
+                row_count = sum(1 for line in f)
+
+            # ERROR: less data than expected
+            if row_count < expected_data_points: 
+                logger.error(f"\n############ WARNING: {expected_data_points} expected, but only {row_count - 1} downloaded! ############")
+
+        # error or not: inform
+        logger.info(f"\ndownloaded {row_count - 1} rows of data and stored in: {my_file}\n-----------\n")
+
+def merge_metadata_files(config: dict, dirs: SimpleNamespace, logger: logging.Logger) -> pd.DataFrame:
+    """
+    Merges downloaded metadata CSV files for each center and parameter into combined dataframes, applies filters, and saves results to disk.
+    
+    :param config: Configuration dictionary containing parameters, centers, and other settings
+    :param dirs: SimpleNamespace containing directory paths for raw data, center-specific data, and combined data storage
+    :param logger: Logger instance for logging messages and errors
+
+    :return: Combined DataFrame of all metadata for all centers and parameters
+    """
+
+    # read config parameters
+    my_centers = config['centers']
+    my_parameters = pd.DataFrame(config['parameters'])
+    my_max_pipeline_deviation = config.get('max_pipeline_deviation', None)
+    my_mouse_columns = config.get('mouse_columns', [
+        'mouse_id', 'external_sample_id',  'gene_symbol', 'sex', 'cohort_type', 'strain', 'center', 'dob'
+    ])
+    additional_api_fields = config.get('additional_api_fields', [])
+    
+    # some counters to inform about the progress
+    number_centers = len(my_centers)
+    number_params  = len(my_parameters)
+    center_counter = 0
+    param_counter  = 0
+
+    # list to collect all center dataframes
+    all_df_list = []
+
+    print(f"reading raw data from: {dirs.raw_data_dir} ")
+
+    # loop over all phenotyping centers
+    for my_center in my_centers:
+        my_center_stripped = my_center.replace(" ", "_")
+
+        center_counter = center_counter + 1
+
+        print(f"\n==================================================================================================================================")
+        print(f"Center {center_counter} of {number_centers}: {my_center}")
+        logger.info(f"\n==================================================================================================================================")
+        logger.info(f"PROCESSING CENTER {center_counter} OF {number_centers}: {my_center} - checking for {number_params} parameter files") 
+        logger.info(f"==================================================================================================================================")
+
+        # dataframe to collect data from all parameters of current center
+        combined_df = pd.DataFrame()
+
+        # loop over all parameters
+        for idx in my_parameters.index:
+            parameter_id = my_parameters.at[idx, "stable_id"]
+            description  = my_parameters.at[idx, "description"]
+            due_week     = int(my_parameters.at[idx, "week"])
+            work_name    = my_parameters.at[idx, "work_name"]
+
+            param_counter = param_counter + 1
+
+            print(f"   Parameter {param_counter} of {number_params}: {parameter_id} ({work_name})")
+            logger.info(f"Parameter {param_counter} of {number_params}: {parameter_id} ({work_name}) ")
+        
+            # build expected file name for raw data of current center and current parameter
+            my_file = os.path.join(dirs.raw_data_dir, f"parameter-{parameter_id}-{my_center_stripped}-raw_data.csv") 
+
+            # check if expected file exists: if yes - process it
+            if os.path.exists(my_file):
+           
+                logger.info(f"processing \"./{my_file}\"... ")
+                df = pd.read_csv(my_file) 
+
+                # inform
+                logger.info(f"   {str(len(df))} rows in file")
+                logger.info(f"   distinct values in columns, sorted - age week should be {str(due_week)}")
+                for col in ["sex", "age_in_weeks", "pipeline_stable_id", "life_stage_name", "biological_sample_group", "strain_name"]:
+                    unique_vals = df[col].dropna().unique()
+                    unique_vals_str = sorted([str(x) for x in unique_vals])
+                    logger.info(f"      {col}: {unique_vals_str}")
+                logger.info(f"   distinct entries")
+            
+                for col in ["external_sample_id", "gene_symbol"]:
+                    logger.info(f"      {col}: {len(df[col].unique())}")
+
+                #----------------------------------------------------
+                # duplicates filter
+                duplicates = df[df.duplicated(subset=['external_sample_id', 'omero_id'], keep=False)]  # get duplicates
+                logger.info(f"   duplicates (same mouse & same value) removed: {str(len(duplicates.external_sample_id.unique()))}")
+                df = df.drop_duplicates(subset=['external_sample_id', 'omero_id'], keep='first')       # remove them, keep first
+                #logger.info(str(len(duplicates.external_sample_id.unique())))                         # inform
+
+                # handle age week
+                weeks = df["age_in_weeks"].value_counts().to_string()
+                weeks_str = str(weeks)
+                logger.info(f"   " + weeks_str.replace('\n', '\n      '))
+
+                #----------------------------------------------------
+                # pipeline filter: remove all entries that deviate from the due_week according to the pipeline
+                initial_length = len(df)
+                if my_max_pipeline_deviation:
+                    df_filtered = df[(df['age_in_weeks'] >= due_week - my_max_pipeline_deviation) & 
+                                    (df['age_in_weeks'] <= due_week + my_max_pipeline_deviation)
+                    ]
+
+                    removed_rows = initial_length - len(df_filtered)
+
+                    # apply changes and report
+                    df = df_filtered
+
+                    if removed_rows > 0:
+                        print(f"       removed {removed_rows} mice, since measure week deviated more than {my_max_pipeline_deviation} weeks from due week given by pipeline!")
+                        logger.info(f"      removed {removed_rows} mice, since measure week deviated more than {my_max_pipeline_deviation} weeks from due week given by pipeline!")
+                #----------------------------------------------------
+            
+                # rebuild dataframe
+                # 1) drop columns
+                df = df.drop(columns=['pipeline_name', 'pipeline_stable_id','life_stage_name','procedure_name', 'procedure_stable_id'])
+                df = df.drop(columns=['age_in_days', 'parameter_stable_id', 'parameter_name', 'age_in_weeks'])
+            
+                # 2) rename columns
+                df = df.rename(columns={'phenotyping_center'      : 'center',
+                                        'date_of_birth'           : 'dob',
+                                        'biological_sample_group' : 'cohort_type',
+                                        'strain_name'             : 'strain', 
+                                        'file_type'               : 'impc_file_type'
+                             })
+                df["mouse_id"] = df["center"].astype(str) + "_" + df["external_sample_id"].astype(str)
+            
+                # 3) sort columns
+                df = df[list(my_mouse_columns) + ['impc_file_type', 'omero_id', 'date_of_experiment'] + list(additional_api_fields)]
+                for col in ['parameter_association_name', 'parameter_association_stable_id', 'parameter_association_value']:
+                    if col not in df.columns:
+                        continue
+                    else:
+                        try:
+                            df[col] = df[col].str.split(',', n=1, expand=True)[0]
+                        except Exception as e:
+                            logger.info(f"No need to split {col}, not a comma-separated string: {e}")
+
+                # 4) change date format
+                df['dob'] = pd.to_datetime(df['dob']).dt.strftime('%Y-%m-%d')
+            
+                # add new columns
+                df['downloaded'] = 'no'
+            
+                # change the values in cohort_type
+                df['cohort_type'] = df['cohort_type'].replace({'experimental': 'mutant'})
+
+                #----------------------------------------------------
+                # now we remove all entries where date of birth (dob) before "2010-11-15"
+                initial_length = len(df)
+                df_filtered = df[(df['dob'] >= "2010-11-15")]
+
+                removed_rows = initial_length - len(df_filtered)
+
+                # apply changes and report
+                df = df_filtered
+
+                if removed_rows > 0:
+                    print(f"       removed {removed_rows} mice born before 2011 (non-IMPC mice)")
+                    logger.info(f"      removed {removed_rows} mice born before 2011 (non-IMPC mice)")
+                #---------------
+            
+                # merge df to combined_df to create a center-specific combined dataframe
+                # merge is based on key_columns
+                key_columns = my_mouse_columns
+            
+                if combined_df.empty:
+                    combined_df = df
+                else:
+                    logger.info(f"   merging data ...")
+                    combined_df = pd.merge(combined_df, df, on=key_columns, how='outer')
+        
+            # in case no file for current parameter found
+            else:
+                print(f"   file {my_file} NOT FOUND!")
+                logger.info(f"file {my_file} ===========> NOT FOUND! ")
+            print(" ")
+
+            # done with current parameter
+
+        # done with current center
+  
+        logger.info(f"total rows (after filter): {len(combined_df)}")
+
+        # ------------------------------------------------    
+
+        # add center dataframe to list for overall IMPC dataframe
+        all_df_list.append(combined_df)
+    
+        # save combined_df to file
+        out_filename = os.path.join(dirs.center_data_dir, f"IMPC-{my_center_stripped}-data.csv")
+        print(f"saving combined data for center \"{my_center}\" to {out_filename}")
+        logger.info(f"\nsaving combined data for center \"{my_center}\" to {out_filename}")
+        combined_df.to_csv(out_filename, index=False)
+
+        # reset parameter counter, be ready for next center
+        param_counter = 0     
+
+    # done with all centers, now create overall IMPC dataframe
+    all_df = pd.concat(all_df_list, ignore_index=True)        # concat all center dataframes
+    all_df['mouse_id'] = all_df['mouse_id'].astype(str)       # convert mouse_ids to string
+    all_df = all_df.sort_values(by='mouse_id')                # sort by mouse_id
+    all_df = all_df.reset_index(drop=True)                    # re-index
+
+    # create logger
+    logger = logging.getLogger('all')
+    logger.setLevel(logging.INFO)
+
+    # save overall IMPC media files data csv file
+    out_filename = os.path.join(dirs.all_data_dir, f"{config['sqlite_db']}.csv")
+    print(f"\n----------\nsaving combined data for all centers to {out_filename}")
+    logger.info(f"\nsaving combined data for all centers {out_filename}")
+    all_df.to_csv(out_filename, index=False)
+
+    logger.info(f"Total: {len(all_df)-1} mice")
+    logger.info(f"Total: {all_df['gene_symbol'].nunique()} genes")
+
+    # copy dataframe (we need it later to merge it with weights dataframe
+    all_data_df = all_df.copy()
+
+    return all_data_df
 
 def get_extension(file_type: str) -> str:
     return IMAGE_FILE_EXTENSION_MAP.get(file_type.upper(), "bin")

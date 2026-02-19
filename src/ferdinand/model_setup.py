@@ -1,55 +1,93 @@
 
 import tensorflow as tf
-from tensorflow import keras
-from keras import Sequential
-from keras.layers import InputLayer, Conv2D, MaxPooling2D, Dropout, Flatten, Dense
 
-def create_model(kernel_size = (3,3),
-                 pool_size = (2,2),
-                 first_filters = 32,
-                 second_filters = 64,
-                 third_filters = 128,
-                 first_dense = 256,
-                 second_dense = 128,
-                 dropout_conv = 0.3,
-                 dropout_dense = 0.3):
+from keras.layers import Input, Conv2D, BatchNormalization, Activation, MaxPooling2D
+from keras.layers import GlobalAveragePooling2D, Dense, Dropout, Add
+from keras.models import Model
+from keras.regularizers import l2
 
-    model = Sequential()
-    # First conv filters
-    model.add(InputLayer(input_shape=(150, 150,1)))
-    model.add(Conv2D(first_filters, kernel_size, activation = 'relu', padding="same"))
-    model.add(Conv2D(first_filters, kernel_size, padding="same", activation = 'relu'))
-    model.add(Conv2D(first_filters, kernel_size, padding="same", activation = 'relu'))
-    model.add(MaxPooling2D(pool_size = pool_size))
-    model.add(Dropout(dropout_conv))
+def create_model( 
+        input_shape=(224, 224, 1),
+        num_classes=360,
+        dropout_rate=0.3,
+        l2_reg=1e-4
+):
+    """
+    Create a CNN model for angle prediction from X-ray images.
+    
+    :param input_shape: Shape of the input images (height, width, channels)
+    :param num_classes: Number of output classes (angles)
+    :param dropout_rate: Dropout rate for regularization
+    :param l2_reg: L2 regularization coefficient
+    
+    :return: Compiled Keras model
+    """
+    inputs = Input(shape=input_shape)
 
-    # Second conv filter
-    model.add(Conv2D(second_filters, kernel_size, padding="same", activation ='relu'))
-    model.add(Conv2D(second_filters, kernel_size, padding="same", activation ='relu'))
-    model.add(Conv2D(second_filters, kernel_size, padding="same", activation ='relu'))
-    model.add(MaxPooling2D(pool_size = pool_size))
-    model.add(Dropout(dropout_conv))
+    # initial conv block
+    x = Conv2D(32, (3, 3), padding='same', kernel_regularizer=l2(l2_reg))(inputs)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    x = Conv2D(32, (3, 3), padding='same', kernel_regularizer=l2(l2_reg))(x)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    x = MaxPooling2D(pool_size=(2, 2))(x)
+    x = Dropout(dropout_rate)(x)
 
-    # Third conv filter
-    model.add(Conv2D(third_filters, kernel_size, padding="same", activation ='relu'))
-    model.add(Conv2D(third_filters, kernel_size, padding="same", activation ='relu'))
-    model.add(Conv2D(third_filters, kernel_size, padding="same", activation ='relu'))
-    model.add(MaxPooling2D(pool_size = pool_size))
-    model.add(Dropout(dropout_conv))
+    # second conv block with residual connection
+    shortcut = Conv2D(64, (1, 1), padding='same')(x)
+    x = Conv2D(64, (3, 3), padding='same', kernel_regularizer=l2(l2_reg))(x)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    x = Conv2D(64, (3, 3), padding='same', kernel_regularizer=l2(l2_reg))(x)
+    x = BatchNormalization()(x)
+    x = Add()([x, shortcut])
+    x = Activation('relu')(x)
+    x = MaxPooling2D(pool_size=(2, 2))(x)
+    x = Dropout(dropout_rate)(x)
 
-    model.add(Flatten())
+    # third conv block with residual connection
+    shortcut = Conv2D(128, (1, 1), padding='same')(x)
+    x = Conv2D(128, (3, 3), padding='same', kernel_regularizer=l2(l2_reg))(x)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    x = Conv2D(128, (3, 3), padding='same', kernel_regularizer=l2(l2_reg))(x)
+    x = BatchNormalization()(x)
+    x = Add()([x, shortcut])
+    x = Activation('relu')(x)
+    x = MaxPooling2D(pool_size=(2, 2))(x)
+    x = Dropout(dropout_rate)(x)
 
-    # First dense
-    model.add(Dense(first_dense, activation = "relu"))
-    model.add(Dropout(dropout_dense))
-    # Second dense
-    model.add(Dense(second_dense, activation = "relu"))
-    model.add(Dropout(dropout_dense))
+    # fourth conv block with residual connection
+    shortcut = Conv2D(256, (1, 1), padding='same')(x)
+    x = Conv2D(256, (3, 3), padding='same', kernel_regularizer=l2(l2_reg))(x)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    x = Conv2D(256, (3, 3), padding='same', kernel_regularizer=l2(l2_reg))(x)
+    x = BatchNormalization()(x)
+    x = Add()([x, shortcut])
+    x = Activation('relu')(x)
+    x = MaxPooling2D(pool_size=(2, 2))(x)
+    x = Dropout(dropout_rate)(x)
 
-    # Output layer
-    model.add(Dense(360, activation="softmax"))
-    model.summary()
+    # global average pooling (reduces overfitting compared to Flatten)
+    x = GlobalAveragePooling2D()(x)
 
+    # dense layers with batch normalization
+    x = Dense(512, kernel_regularizer=l2(l2_reg))(x)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    x = Dropout(dropout_rate)(x)
+
+    x = Dense(256, kernel_regularizer=l2(l2_reg))(x)
+    x = BatchNormalization()(x)
+    x = Activation('relu')(x)
+    x = Dropout(dropout_rate)(x)
+
+    # output layer - SOFTMAX for multi-class classification
+    outputs = Dense(num_classes, activation='softmax')(x)
+
+    model = Model(inputs=inputs, outputs=outputs)
     return model
 
 def angle_error(y_true, y_pred):

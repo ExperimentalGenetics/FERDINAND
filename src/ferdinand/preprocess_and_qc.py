@@ -425,8 +425,8 @@ def flag_overexposed_images(conn, db_table, rows: pd.DataFrame, source_path, log
                                          condition_column='omero_id',
                                          condition_value=row['omero_id'])
                 
-def predict_orientation_angle(conn, db_table, model, image_file_path, db_column_name, 
-                              preproc_func=imgutl.binarize_images, image=None):
+def predict_orientation_angle(conn, db_table, model, image_file_path, db_column_name, target_size=(224, 224),
+                              preproc_func=None, image=None):
     """
     Predicts the orientation angle of an image using a pre-trained model and updates the database with the predicted angle.
     
@@ -447,7 +447,8 @@ def predict_orientation_angle(conn, db_table, model, image_file_path, db_column_
             raise FileNotFoundError(f"Image not found at path: {image_file_path}")
 
     # Resize the image for the model
-    resized_image_as_array = imgutl.resize_image_to_array(image_file_path=image_file_path, img=image)
+    resized_image_as_array = imgutl.resize_image_to_array(image_file_path=image_file_path, 
+                                                          img=image, target_size=target_size)
 
     if preproc_func is not None:
         resized_image_as_array = preproc_func(resized_image_as_array)
