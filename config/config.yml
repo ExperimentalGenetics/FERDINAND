@@ -2,8 +2,8 @@
 # ==============================================================
 
 # Run configuration
-run_name: &run_name "2025-09-23"
-run_description: &run_description "test_run"
+run_name: &run_name "DR23_2025-09-23"
+run_description: &run_description "Dataset creation pipeline run for the DR23 release of the IMPC radiographs"
 data_source: &data_source "IMPC"
 
 # IMPC centers
@@ -51,20 +51,25 @@ settings:
   data_source: *data_source
 
 project_root: ".."
+# Directories for storing data, reports, models, and the sqlite database
 data_dir: "full_data"
 reports_dir: "reports"
+models_dir: "models"
+# Name of the sqlite database file (without the .db extension) to be created in the all_data_dir directory, 
+# and used for storing all metadata related to the images in the dataset 
+# and the results of the quality control and rotation angle prediction steps
 sqlite_db: "IMPC_radiographs"
-# angle detection model trained on a subset of the data, to be used for predicting the rotation angle of images in the dataset
+# Angle detection model trained on a subset of the data, to be used for predicting the rotation angle of images in the dataset
 angle_detection_model: "2026-02-09_rotation_cnn_model.h5"
 
+# Define the directory structure for the project
 directories:
-  models_dir: "000_models"
-  raw_data_dir: "010_raw_data"
-  center_data_dir: "020_center_data"
-  all_data_dir: "030_all_data"
-  images_dir: "040_all_images"
-  thumbnails_dir: "041_all_thumbnails"
-  preprocessed_dir: "050_preprocessed_images"
-  preprocessed_thumbnails_dir: "051_preprocessed_thumbnails"
-  rotated_dir: "055_rotated_images"
-  rotated_thumbnails_dir: "056_rotated_thumbnails"
+  all_data_dir: "000_all_data"
+  raw_data_dir: "100_raw_data"
+  center_data_dir: "110_center_data"
+  images_dir: "200_all_images"
+  thumbnails_dir: "210_all_thumbnails"
+  preprocessed_dir: "300_preprocessed_images"
+  preprocessed_thumbnails_dir: "310_preprocessed_thumbnails"
+  rotated_dir: "400_rotated_images"
+  rotated_thumbnails_dir: "410_rotated_thumbnails"

@@ -596,12 +596,6 @@ def rotate_image(image, angle, border_width=None, background_color=None):
     if background_color is None:
         background_color = measure_image_border_color(image, border_width=border_width)
 
-    # Don't convert grayscale images to BGR, keep them as they are
-    if image.ndim == 2:  # grayscale image  
-        channels = 1
-    else:  # RGB or color image
-        channels = 3
-
     h, w = image.shape[:2]
     
     # rotated

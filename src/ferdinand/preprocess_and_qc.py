@@ -562,8 +562,7 @@ def load_and_rotate_image(conn, db_table, image_file, source_path, target_path, 
 
     rotated_image = imgutl.rotate_image(image, rotation_angle, background_color=mean_color.tolist())
 
-    column = 'rotated'
-    sqlutl.add_column_to_table(conn, db_table, column, 'TEXT', default_value='no')
+    sqlutl.add_column_to_table(conn, db_table, 'rotated', 'TEXT', default_value='no')
     if rotated_image is not None:
 
         if source_path in os.path.dirname(image_file) and target_path is not None:
