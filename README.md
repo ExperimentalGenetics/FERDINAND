@@ -45,8 +45,57 @@ It is recommended to install the project inside a __virtual environment__. To do
     pip install -e .
     ```
 
+
 To __deactivate__ the environment:
 
 ```bash
 deactivate
 ```
+
+---
+
+## Quick Start Example
+
+1. Fetch metadata and images from IMPC:
+    - Run the notebook: `notebooks/100_fetch_data_from_impc.ipynb`
+    - Download images: `notebooks/200_download_impc_images.ipynb`
+2. Preprocess and curate dataset:
+    - Preprocessing: `notebooks/300_preprocess_dataset.ipynb`
+    - Curation: `notebooks/310_curate_dataset.ipynb`
+3. Check image quality and rotate images (optional):
+    - `notebooks/320_check_image_quality.ipynb`
+    - `notebooks/400_rotate_images.ipynb`
+
+All steps are modular and can be run independently. See the `notebooks/` directory for detailed documentation and example usage.
+
+---
+
+## Project Structure
+
+- `src/ferdinand/`: Core Python modules (data download, preprocessing, clustering, utilities)
+- `notebooks/`: Jupyter notebooks for each pipeline step
+- `data/`: Project data (raw, processed, images, thumbnails)
+- `models/`: Trained models
+- `reports/`: HTML reports, logs, cluster galleries
+- `config/`: Configuration files (YAML)
+
+---
+
+## Main Modules
+
+- `download_utils.py`: Download metadata and images from IMPC
+- `preprocess_and_qc.py`: Preprocess images, quality control
+- `clustering_utils.py`: Feature extraction, clustering (Leiden, KNN, etc.)
+- `sqlite_utils.py`: Lightweight metadata storage and queries
+- `image_utils.py`: Image manipulation and augmentation
+
+---
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+
+## Authors
+
+Elida Schneltzer, Experimental Genetics, Helmholtz Munich
+and contributors. See [GitHub contributors](https://github.com/ExperimentalGenetics/FERDINAnD/graphs/contributors)
