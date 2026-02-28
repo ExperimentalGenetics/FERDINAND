@@ -368,12 +368,12 @@ def create_thumbnail_gallery(data: pd.DataFrame,
                     f.write(f'''
                             <div style="display:inline-block; text-align:center;">
                             <a href="{orig_file}"><img src="{thumb_file}" width="128"></a><br>
-                            predict: {row['fst_angle_prediction']}°/{row['snd_angle_prediction']}°
+                            {row['omero_id']} ({row['fst_angle_prediction']}°/{row['snd_angle_prediction']}°)
                             </div>''')
                 else:
                     f.write(f'''
                             <div style="display:inline-block; text-align:center;">
                             <a href="{orig_file}"><img src="{thumb_file}" width="128"></a><br>
-                            omero_id: {row['omero_id']}
+                            {row['omero_id']}
                             </div>''')
         f.write("</body></html>")

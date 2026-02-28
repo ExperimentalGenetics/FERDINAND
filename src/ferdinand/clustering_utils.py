@@ -1,16 +1,11 @@
-import os, json, torch
-import timm
+import os, torch
 
 from torch.utils.data import Dataset, DataLoader
 from PIL import Image
-from torchvision import transforms
 
 import torch.nn as nn
 
-from torch.optim import AdamW
-from torch.utils.data import DataLoader, random_split
-from torchvision import transforms, datasets
-from pathlib import Path
+from torch.utils.data import DataLoader
 
 import torch
 from torch.utils.data import Dataset, DataLoader
@@ -30,6 +25,10 @@ from skopt import gp_minimize
 from skopt.space import Integer, Real
 from skopt.plots import plot_convergence, plot_objective
 
+"""
+This script provides image clustering utilities using deep learning and 
+graph-based community detection.
+"""
 
 class FileListDataset(Dataset):
     def __init__(self, file_list, transform=None):
@@ -50,8 +49,12 @@ def collate_fn(batch):
     imgs, paths = zip(*batch)
     return list(imgs), list(paths)
 
-def extract_features(image_files, model_name = "microsoft/swin-tiny-patch4-window7-224"): # "openai/clip-vit-base-patch16"): 
-
+def extract_features(image_files, 
+                     model_name = "microsoft/swin-tiny-patch4-window7-224"): # "openai/clip-vit-base-patch16"): 
+    """
+    Extracts feature embeddings from images using a pre-trained transformer model (SWIN or CLIP), 
+    normalizes them, and returns the features and file paths.
+    """
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     processor = AutoProcessor.from_pretrained(model_name, use_fast=True)
@@ -67,8 +70,6 @@ def extract_features(image_files, model_name = "microsoft/swin-tiny-patch4-windo
         for imgs, img_paths in dataloader:
             inputs = processor(images=imgs, return_tensors="pt").to(device)
 
-            #embeddings = model.get_image_features(**inputs)
-
             outputs = model(**inputs)
             embeddings = outputs.pooler_output
             embeddings = embeddings / embeddings.norm(dim=-1, keepdim=True)
@@ -81,16 +82,20 @@ def extract_features(image_files, model_name = "microsoft/swin-tiny-patch4-windo
     return paths, features
 
 def build_knn_graph(features, n_neighbors=5):
-    # KNN-Graph bauen
+    """
+    Builds a k-nearest neighbor graph from the feature vectors and 
+    converts it to an iGraph structure.
+    """
+    # build KNN graph
     A = kneighbors_graph(
         features,
         n_neighbors=n_neighbors,
         mode='connectivity',
         include_self=False
     )
-    A = A.maximum(A.T)  # symmetrisieren
+    A = A.maximum(A.T)  # symmetrise
 
-    # igraph konstruieren
+    # build igraph
     sources, targets = A.nonzero()
     g = ig.Graph(
         n=A.shape[0],
@@ -100,6 +105,9 @@ def build_knn_graph(features, n_neighbors=5):
     return g
 
 def leiden_with_resolution(g, resolution, seed=42):
+    """
+    Applies the Leiden clustering algorithm (community detection) with a specified resolution parameter.
+    """
     partition = leidenalg.find_partition(
         g,
         leidenalg.RBConfigurationVertexPartition,
@@ -118,7 +126,10 @@ def find_best_resolution(
     repeats=1,
     seed=42
 ):
-
+    """
+    Searches through a range of resolution parameters to find 
+    the one that maximizes modularity (cluster quality).
+    """
     g = build_knn_graph(features, n_neighbors=n_neighbors)
 
     results = []
@@ -183,7 +194,7 @@ def find_best_parameters_bayesian(
         Print progress information
     """
     
-    # History for all evaluations
+    # history for all evaluations
     history = []
     
     def objective(params):
@@ -213,7 +224,7 @@ def find_best_parameters_bayesian(
         mean_modularity = np.mean(modularity_scores)
         std_modularity = np.std(modularity_scores)
         
-        # Save to history
+        # save to history
         history.append({
             'n_neighbors': n_neighbors,
             'resolution': resolution,
@@ -227,10 +238,10 @@ def find_best_parameters_bayesian(
                   f"Modularity={mean_modularity:.4f}±{std_modularity:.4f}, "
                   f"Clusters={n_clusters}")
         
-        # Minimize = return negative modularity
+        # minimize = return negative modularity
         return -mean_modularity
     
-    # Define search space
+    # define search space
     space = [
         Integer(n_neighbors_range[0], n_neighbors_range[1], name='n_neighbors'),
         Real(resolution_range[0], resolution_range[1], name='resolution')
@@ -240,7 +251,7 @@ def find_best_parameters_bayesian(
     print(f" Search space: n_neighbors={n_neighbors_range}, resolution={resolution_range}")
     print(f" Evaluations: {n_calls} (including {n_random_starts} random)\n")
     
-    # Run Bayesian Optimization
+    # run Bayesian optimization
     result = gp_minimize(
         objective,
         space,
@@ -252,12 +263,12 @@ def find_best_parameters_bayesian(
         n_jobs=1  # Parallelization if desired
     )
     
-    # Extract best parameters
+    # extract best parameters
     best_n_neighbors = int(result.x[0])
     best_resolution = result.x[1]
     best_modularity = -result.fun  # Make positive again
     
-    # Recompute best partition
+    # recompute best partition
     g = build_knn_graph(features, n_neighbors=best_n_neighbors)
     _, _, best_partition = leiden_with_resolution(g, best_resolution, seed)
     
@@ -271,8 +282,10 @@ def find_best_parameters_bayesian(
     }
 
 def plot_optimization_results(result, output_dir=None):
-    """Visualizes the Bayesian Optimization results"""
-    
+    """
+    Creates visualizations of the optimization process, including convergence plots, 
+    parameter space exploration, and cluster counts.
+    """
     fig, axes = plt.subplots(2, 2, figsize=(15, 12))
     
     # 1. Convergence Plot
@@ -338,7 +351,7 @@ def plot_optimization_results(result, output_dir=None):
 
 def analyze_sensitivity(features, result, n_samples=20, seed=42, output_dir=None):
     """
-    Analyzes sensitivity around the best parameters
+    Tests how robust the clustering is to small variations in the optimal parameters.
     """
     best_n = result['best_n_neighbors']
     best_r = result['best_resolution']
@@ -351,7 +364,7 @@ def analyze_sensitivity(features, result, n_samples=20, seed=42, output_dir=None
     
     print("\nSensitivity analysis...")
     
-    # Variation of n_neighbors
+    # variation of n_neighbors
     for n in n_range:
         g = build_knn_graph(features, n_neighbors=int(n))
         mod, n_clust, _ = leiden_with_resolution(g, best_r, seed)
@@ -362,7 +375,7 @@ def analyze_sensitivity(features, result, n_samples=20, seed=42, output_dir=None
             'n_clusters': n_clust
         })
     
-    # Variation of resolution
+    # variation of resolution
     g = build_knn_graph(features, n_neighbors=best_n)
     for r in r_range:
         mod, n_clust, _ = leiden_with_resolution(g, r, seed)
@@ -373,7 +386,7 @@ def analyze_sensitivity(features, result, n_samples=20, seed=42, output_dir=None
             'n_clusters': n_clust
         })
     
-    # Visualization
+    # visualization
     fig, axes = plt.subplots(1, 2, figsize=(14, 5))
     
     n_data = [r for r in results if r['type'] == 'n_neighbors']
@@ -403,5 +416,3 @@ def analyze_sensitivity(features, result, n_samples=20, seed=42, output_dir=None
     plt.show()
     
     return results
-
-

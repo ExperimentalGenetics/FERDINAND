@@ -1,4 +1,3 @@
-
 import pydicom
 import os
 import cv2
@@ -8,6 +7,7 @@ import PIL.ImageOps as ImageOps
 
 from pydicom.errors import InvalidDicomError
 from pydicom.misc import is_dicom
+from tensorflow.keras.preprocessing import image as keras_image
 from PIL import Image
 from io import BytesIO
 
@@ -511,37 +511,24 @@ def pad_image_to_square(image, border_width=10):
 
     return image
 
-def resize_image_to_array(image_file_path, target_size, img=None):
+def get_image_as_array(image_file_path, target_size):
     """
-    Load an image from the given path, resize it, convert it to grayscale, and return it as a NumPy array.
+    Resize the image and return as a numpy array.
 
-    The image is resized to target_size, converted to grayscale, and transformed into a NumPy array.
-    This method uses OpenCV for handling image operations and outputs a 4D array.
-    Raises FileNotFoundError if the specified image path does not exist.
-    :param img:
-    :param image_file_path:
-    :param target_size:
-    :return: A NumPy array representing the processed image. The array is 4D with an additional batch dimension at index 0.
+    :param image_file_path: Path to the image file
+    :param target_size: Target size (height, width)
+
+    :return: NumPy array of shape (1, H, W, 1)
     """
-
-    if img is None:
-
-        # Check if the provided image path exists
-        if not os.path.exists(image_file_path):
-            raise FileNotFoundError(f"The specified image file does not exist: {image_file_path}")
-
-        # Load the image in grayscale (0 = grayscale mode)
-        img = cv2.imread(image_file_path, cv2.IMREAD_GRAYSCALE)
-        if img is None:
-            raise ValueError(f"Failed to load the image from path: {image_file_path}")
-
-    # Resize the image to 150x150 pixels
-    img = cv2.resize(img, target_size)
-
-    # Expand dimensions to match the expected 4D shape (batch size, height, width, channels)
-    img = np.expand_dims(img, axis=(0, -1))  # Shape becomes (1, 150, 150, 1)
-
-    return img
+    ret_val = []
+    if os.path.exists(image_file_path):
+        with Image.open(image_file_path) as img:
+            img = img.resize(target_size)
+            img = img.convert('L')  # convert the image to grayscale
+            x = keras_image.img_to_array(img)
+            ret_val.append(x)
+    ret_val = np.array(ret_val)
+    return ret_val
 
 def apply_brightness(image, target_brightness=20):
     """

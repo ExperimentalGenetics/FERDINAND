@@ -45,7 +45,6 @@ It is recommended to install the project inside a __virtual environment__. To do
     pip install -e .
     ```
 
-
 To __deactivate__ the environment:
 
 ```bash
