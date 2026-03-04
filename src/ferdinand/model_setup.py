@@ -1,10 +1,15 @@
 
 import tensorflow as tf
 
-from keras.layers import Input, Conv2D, BatchNormalization, Activation, MaxPooling2D
-from keras.layers import GlobalAveragePooling2D, Dense, Dropout, Add
-from keras.models import Model
-from keras.regularizers import l2
+from tensorflow.keras.layers import Input, Conv2D, BatchNormalization, Activation, MaxPooling2D
+from tensorflow.keras.layers import GlobalAveragePooling2D, Dense, Dropout, Add
+from tensorflow.keras.layers import Model
+from tensorflow.keras.layers import l2
+
+"""
+This module defines the CNN architecture for predicting angles from X-ray images. 
+The model is designed to handle the specific characteristics of the dataset, including the input image size and the number of output classes (angles). 
+"""
 
 def create_model( 
         input_shape=(224, 224, 1),
@@ -14,12 +19,10 @@ def create_model(
 ):
     """
     Create a CNN model for angle prediction from X-ray images.
-    
     :param input_shape: Shape of the input images (height, width, channels)
     :param num_classes: Number of output classes (angles)
     :param dropout_rate: Dropout rate for regularization
     :param l2_reg: L2 regularization coefficient
-    
     :return: Compiled Keras model
     """
     inputs = Input(shape=input_shape)

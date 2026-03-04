@@ -11,6 +11,11 @@ import ferdinand.image_utils as imgutl
 import ferdinand.utils as utl
 import ferdinand.preprocess_and_qc as ppqc
 
+"""
+This module contains functions for preprocessing and quality control of images downloaded from the IMPC. 
+Each center may have specific preprocessing steps based on the characteristics of the images they provide. 
+"""
+
 def preprocess_image_from_BCM(image):
     """
     Preprocess the given image from BCM using a series of image enhancement techniques.
@@ -20,7 +25,6 @@ def preprocess_image_from_BCM(image):
         - methods_used (list of str): A list of method names that were applied to the image
                                       during pre-processing, in the order they were applied.
     """
-
     methods_used = []
 
     preproc_img, method_name = imgutl.apply_gaussian_blur(image)
@@ -44,10 +48,13 @@ def preprocess_image_from_BCM(image):
 
 def preprocess_image_from_HMGU(image):
     """
-    @TODO
-    :param image:
-    :return:
-    """
+    Preprocess the given image from center HMGU using a series of image enhancement techniques.
+    :param image: The image to be processed.
+    :return: tuple
+        - result_image (ndarray): The processed image after applying the transformations.
+        - methods_used (list of str): A list of method names that were applied to the image
+                                      during pre-processing, in the order they were applied.
+    """ 
     methods_used = []
     # kernel_setting_value = 1
 
@@ -64,16 +71,12 @@ def preprocess_image_from_HMGU(image):
 
 def preprocess_image_from_ICS(image):
     """
-    @TODO
-    Preprocess the input image from mrc ics using a series of image enhancement techniques.
-
-    Args: image (ndarray): The input image to be processed. This should be compatible with
-                         the `image_utils` library used for transformations.
-    Returns:
-        tuple:
-            result_image (ndarray): The processed image after applying the transformations.
-            methods_used (list of str): A list of method names that were applied to the image
-                                        during preprocessing, in the order they were applied.
+    Preprocess the given image from center ICS using a series of image enhancement techniques.
+    :param image: The image to be processed.
+    :return: tuple
+        - result_image (ndarray): The processed image after applying the transformations.
+        - methods_used (list of str): A list of method names that were applied to the image
+                                      during pre-processing, in the order they were applied.
     """
     methods_used = []
 
@@ -97,16 +100,13 @@ def preprocess_image_from_ICS(image):
 
 def _standard_preprocess_image_from_center(image):
     """
-    Apply a standard series of image enhancement techniques to preprocess the input image.
-    Args:
-        image (ndarray): The input image to be processed.
-    Returns:
-        tuple:
-            result_image (ndarray): The processed image after applying the transformations.
-            methods_used (list of str): A list of method names that were applied to the image
-                                        during preprocessing, in the order they were applied.
+    Apply a standard series of image enhancement techniques to preprocess the input image from centers where no specific preprocessing is defined.
+    :param image: The input image to be processed.
+    :return: tuple
+        - result_image (ndarray): The processed image after applying the transformations.
+        - methods_used (list of str): A list of method names that were applied to the image
+                                      during preprocessing, in the order they were applied.
     """
-
     methods_used = []
 
     preproc_img, method_name = imgutl.apply_gaussian_blur(image)
@@ -122,46 +122,31 @@ def _standard_preprocess_image_from_center(image):
 
 def preprocess_image_from_JAX(image):
     """
-    @TODO
-    Preprocess the input image from jax center using a series of image enhancement techniques.
-
-    Args: image (ndarray): The input image to be processed. This should be compatible with
-                         the `image_utils` library used for transformations.
-    Returns:
-        tuple:
-            result_image (ndarray): The processed image after applying the transformations.
-            methods_used (list of str): A list of method names that were applied to the image
-                                        during preprocessing, in the order they were applied.
+    Preprocess the input image from center JAX using a series of image enhancement techniques.
+    :param image: The input image to be processed.
+    :return: tuple
+        - result_image (ndarray): The processed image after applying the transformations.
+        - methods_used (list of str): A list of method names that were applied to the image during preprocessing, in the order they were applied.
     """
     return _standard_preprocess_image_from_center(image)
 
 def preprocess_image_from_KMPC(image):
     """
-    @TODO
-    Preprocess the input image from mrc kmpc using a series of image enhancement techniques.
-
-    Args: image (ndarray): The input image to be processed. This should be compatible with
-                         the `image_utils` library used for transformations.
-    Returns:
-        tuple:
-            result_image (ndarray): The processed image after applying the transformations.
-            methods_used (list of str): A list of method names that were applied to the image
-                                        during preprocessing, in the order they were applied.
+    Preprocess the input image from center KMPC using a series of image enhancement techniques.
+    :param image: The input image to be processed.
+    :return: tuple
+        - result_image (ndarray): The processed image after applying the transformations.
+        - methods_used (list of str): A list of method names that were applied to the image during preprocessing, in the order they were applied.
     """
     return _standard_preprocess_image_from_center(image)
 
 def preprocess_image_from_MRC_Harwell(image):
     """
-    @TODO
-    Preprocess the input image from mrc harwell center using a series of image enhancement techniques.
-
-    Args: image (ndarray): The input image to be processed. This should be compatible with
-                         the `image_utils` library used for transformations.
-    Returns:
-        tuple:
-            result_image (ndarray): The processed image after applying the transformations.
-            methods_used (list of str): A list of method names that were applied to the image
-                                        during preprocessing, in the order they were applied.
+    Preprocess the input image from center MRC Harwell using a series of image enhancement techniques.
+    :param image: The input image to be processed.
+    :return: tuple
+        - result_image (ndarray): The processed image after applying the transformations.
+        - methods_used (list of str): A list of method names that were applied to the image during preprocessing, in the order they were applied.
     """
     methods_used = []
 
@@ -189,24 +174,22 @@ def preprocess_image_from_MRC_Harwell(image):
 
 def preprocess_image_from_RBRC(image):
     """
-    @TODO
-    :param image:
-    :return:
+    Preprocess the input image from center RBRC using a series of image enhancement techniques.
+    :param image: The input image to be processed.
+    :return: tuple
+        - result_image (ndarray): The processed image after applying the transformations.
+        - methods_used (list of str): A list of method names that were applied to the image during preprocessing, in the order they were applied.
     """
     return _standard_preprocess_image_from_center(image)
 
 def preprocess_image_from_TCP(image):
     """
-    Preprocess the input image from mrc tcp using a series of image enhancement techniques.
-
-    Args: image (ndarray): The input image to be processed. This should be compatible with
-                         the `image_utils` library used for transformations.
-    Returns:
-        tuple:
-            result_image (ndarray): The processed image after applying the transformations.
-            methods_used (list of str): A list of method names that were applied to the image
-                                        during preprocessing, in the order they were applied.
-    """
+    Preprocess the input image from center TCP using a series of image enhancement techniques.
+    :param image: The input image to be processed.
+    :return: tuple
+        - result_image (ndarray): The processed image after applying the transformations.
+        - methods_used (list of str): A list of method names that were applied to the image during preprocessing, in the order they were applied.
+    """    
     methods_used = []
 
     average_brightness, median_brightness = imgutl.analyze_center_brightness(image)
@@ -230,16 +213,11 @@ def preprocess_image_from_TCP(image):
 
 def preprocess_image_from_UC_Davis(image):
     """
-    @TODO
-    Preprocess the input image using a series of image enhancement techniques.
-    Args:
-        image (ndarray): The input image to be processed. This should be compatible with
-                         the `image_utils` library used for transformations.
-    Returns:
-        tuple:
-            result_image (ndarray): The processed image after applying the transformations.
-            methods_used (list of str): A list of method names that were applied to the image
-                                        during preprocessing, in the order they were applied.
+    Preprocess the input image from center UC Davis using a series of image enhancement techniques.
+    :param image: The input image to be processed.
+    :return: tuple
+        - result_image (ndarray): The processed image after applying the transformations.
+        - methods_used (list of str): A list of method names that were applied to the image during preprocessing, in the order they were applied.
     """
     methods_used = []
 
@@ -266,13 +244,15 @@ def preprocess_image_from_UC_Davis(image):
 
 def preprocess_image_from_WTSI(image):
     """
-    @TODO
-    :param image:
-    :return:
+    Preprocess the input image from center WTSI using a series of image enhancement techniques.
+    :param image: The input image to be processed.
+    :return: tuple
+        - result_image (ndarray): The processed image after applying the transformations.
+        - methods_used (list of str): A list of method names that were applied to the image during preprocessing, in the order they were applied.
     """
     return _standard_preprocess_image_from_center(image)
 
-# Map centers to their respective preprocessing functions
+# map centers to their respective preprocessing functions
 FUNC_MAP = {
     "BCM": preprocess_image_from_BCM,
     "HMGU": preprocess_image_from_HMGU,
@@ -289,7 +269,7 @@ FUNC_MAP = {
 def preprocess_image(conn, db_table, center, image_file_path, source_path, target_path, 
                      pad_to_square=True, logger=None):
     """
-    Preprocess the given image file based on the specified center's preprocessing function.
+    Preprocess the given image file based on the specified center's preprocessing function.  
     :param conn: Active sqlite connection object.
     :param center: Name of centre where the image has been generated.
     :param image_file_path: Full path to the image file to be processed.
@@ -297,7 +277,8 @@ def preprocess_image(conn, db_table, center, image_file_path, source_path, targe
     :param target_path: Path to where the processed images are locally stored.
     :param pad_to_square: Boolean indicating whether to pad the images to a square shape before saving (default: True).
     :param logger: Logger object for logging messages (default: None).
-    :return: tuple (preproc_file_path, preproc_image, methods_used)"""
+    :return: tuple (preproc_file_path, preproc_image, methods_used)
+    """
 
     preproc_func = FUNC_MAP.get(center)
     if preproc_func is None:
@@ -361,7 +342,6 @@ def preprocess_images(conn, db_table, center, image_files, source_path, target_p
     :param logger: Logger object for logging messages (default: None).
     :return: List of file paths to the pre-processed images.
     """
-
     preproc_img_files = []
     for img_file in image_files:
         try: 
@@ -383,18 +363,14 @@ def preprocess_images(conn, db_table, center, image_files, source_path, target_p
     return preproc_img_files
 
 def flag_overexposed_images(conn, db_table, rows: pd.DataFrame, source_path, logger=None): 
-
     """
     Flags images as overexposed based on brightness analysis and updates the database accordingly.
-    
     :param conn: Active sqlite connection object.
     :param db_table: Name of the database table to update.
     :param rows: DataFrame containing rows for which overexposure is to be flagged.
-    :type rows: pd.DataFrame
     :param source_path: Path to the local image directory.
     :param logger: Logger object for logging messages (default: None).
     """
-
     if not rows.empty:
 
         _df = rows.copy()
@@ -408,7 +384,7 @@ def flag_overexposed_images(conn, db_table, rows: pd.DataFrame, source_path, log
                 print(f"Warning: Could not read image at location: {image_file}")
                 continue
         
-            is_object_too_bright = imgutl.analyze_maus_brightness_median(image)
+            is_object_too_bright = imgutl.analyze_mouse_brightness_median(image)
             is_overall_too_bright= imgutl.detect_global_overexposure(image)
 
             for col, val in {'overexposed': is_object_too_bright, 
@@ -430,7 +406,6 @@ def predict_orientation_angle(conn, db_table, model, image_file_path, db_column_
                               preproc_func=None, image=None):
     """
     Predicts the orientation angle of an image using a pre-trained model and updates the database with the predicted angle.
-    
     :param conn: Active sqlite connection object.
     :param model: Loaded model used for angle prediction.
     :param image_file_path: Full path to the image file to be processed.
@@ -440,14 +415,13 @@ def predict_orientation_angle(conn, db_table, model, image_file_path, db_column_
     :param image: Optional pre-loaded image data. If not provided, the image will be read from the file path.
     :return: Predicted angle of the image
     """
-
-    # Load the image in grayscale
+    # load the image in grayscale
     if image is None:
         image = cv2.imread(image_file_path, cv2.IMREAD_GRAYSCALE)
         if image is None:
             raise FileNotFoundError(f"Image not found at path: {image_file_path}")
 
-    # Resize the image for the model
+    # resize the image for the model
     resized_image_as_array = imgutl.get_image_as_array(image_file_path=image_file_path, 
                                                           target_size=target_size)
 
@@ -457,7 +431,7 @@ def predict_orientation_angle(conn, db_table, model, image_file_path, db_column_
     predict = model.predict(resized_image_as_array)
     predicted_angle = np.argmax(predict, axis=1).item()
 
-    # Extract Omero ID from the file name
+    # extract Omero ID from the file name
     image_file_name = os.path.basename(image_file_path)
     omero_id, _ = os.path.splitext(image_file_name)
 
@@ -472,7 +446,7 @@ def predict_orientation_angle(conn, db_table, model, image_file_path, db_column_
             raise ValueError(f"Expected exactly one row in the database for image with Omero ID {omero_id}, "
                              f"but found {len(samples)}.")
 
-        # Extract mouse ID from the database sample
+        # extract mouse ID from the database sample
         mouse_id = samples["mouse_id"].item()
 
         if db_column_name is not None:
@@ -493,10 +467,8 @@ def predict_orientation_angle(conn, db_table, model, image_file_path, db_column_
 def predict_rotation_angle(predicted_orientation_angle, logger=None):
     """
     Predicts the rotation angle needed to correct the image orientation based on the predicted orientation angle.
-    
     :param predicted_orientation_angle: The predicted orientation angle of the image (in degrees).
     :param logger: Logger object for logging messages (default: None).
-    
     :return: The angle difference (in degrees) needed to rotate the image to the correct orientation.
     """
     predicted_rotation_angle = (-predicted_orientation_angle)%360
@@ -511,15 +483,12 @@ def load_and_rotate_image(conn, db_table, image_file, source_path, target_path, 
     """
     Loads an image, predicts its orientation angle using a pre-trained model, rotates the image accordingly, and saves the rotated image to the target path. 
     The function also updates the database with the rotation status and new image dimensions.
-    
     :param conn: Active sqlite connection object.
     :param db_table: Name of the database table to update.
     :param image_file: Name of the image file to be processed.
     :param source_path: Path to the source directory where the image is located.
-
     :param target_path: Description
     :param logger: Description
-    
     :return: tuple (rotated_file_path, rotated_image, rotation_angle)
         - rotated_file_path (str): The file path where the rotated image is saved.
         - rotated_image (ndarray): The rotated image after applying the rotation correction.
@@ -594,13 +563,11 @@ def load_and_rotate_images(conn, db_table, image_files, source_path, target_path
                            logger=None, no_of_images_to_show=5):
     """
     Processes and rotates a list of images based on predicted rotation angles, and stores them in the archive.
-    
     :param conn: Active sqlite connection object.
     :param image_files: List of image file paths to be processed.
     :param source_path: Path to locally saved images.
     :param target_path: Path to where the processed images are locally stored.
     :param logger: Logger object for logging messages (default: None).
-    
     :return: List of file paths to the rotated images.
     """
 

@@ -7,17 +7,22 @@ import PIL.ImageOps as ImageOps
 
 from pydicom.errors import InvalidDicomError
 from pydicom.misc import is_dicom
-from tensorflow.keras.preprocessing import image as keras_image
+from tensorflow.keras.preprocessing import img_to_array
 from PIL import Image
 from io import BytesIO
 
+"""
+This module provides utility functions for processing and analyzing images, including DICOM and common image formats.
+"""
+
 def detect_file_format(response):
     """
-    Detect the file format from a requests.Response object
+    Detect image file format from an HTTP response by checking the Content-Type header and attempting to read the content with PIL and pydicom.
+    
     :param response: requests.Response object from requests.get()
     :return: Detected file format, e.g. "JPEG", "PNG", "DICOM", or "Unknown".
     """
-    # 1. Check HTTP Content-Type header
+    # 1. check HTTP Content-Type header
     content_type = response.headers.get("Content-Type", "").lower()
     if "jpeg" in content_type:
         return "JPEG"
@@ -28,14 +33,14 @@ def detect_file_format(response):
     elif "bmp" in content_type:
         return "BMP"
 
-    # 2. Try with PIL (JPEG, PNG, etc.)
+    # 2. try with PIL (JPEG, PNG, etc.)
     try:
         img = Image.open(BytesIO(response.content))
         return img.format  # e.g. "JPEG", "PNG"
     except Exception:
         pass
 
-    # 3. Try with pydicom
+    # 3. try with pydicom
     try:
         _ = pydicom.dcmread(BytesIO(response.content))
         return "DICOM"
@@ -45,13 +50,19 @@ def detect_file_format(response):
     return "Unknown"
 
 def get_png_pixel_spacing(image, logger=None):
-
     """
-    Extract pixel_spacing_x and pixel_spacing_y from a metadata dictionary.
-    Tries 'dcm:PixelSpacing' first, then 'dcm:ImagerPixelSpacing'.
-    Returns (pixel_spacing_x, pixel_spacing_y, manufacturer, manufacturer_model_name) or (None, None, None, None).
-    """
+    Extract metadata (size, spacing, DPI, manufacturer) from DICOM/PNG/JPEG.
 
+    :param image: A PIL Image object containing the image and its metadata.
+    :param logger: Optional logger for logging warnings and errors.
+
+    :return: A tuple containing:
+        - spacing_key (str): The key used to extract pixel spacing (e.g., 'dcm:PixelSpacing' or 'dcm:ImagerPixelSpacing').
+        - pixel_spacing_x (float): The pixel spacing in the x-direction (column spacing).
+        - pixel_spacing_y (float): The pixel spacing in the y-direction (row spacing).
+        - manufacturer (str or None): The manufacturer of the imaging device, if available in the metadata.
+        - manufacturer_model_name (str or None): The model name of the imaging device, if available in the metadata.
+    """
     # validate input type
     if not isinstance(image, Image.Image):
         error_msg = f"Expected PIL Image object, got {type(image).__name__}"
@@ -98,18 +109,19 @@ def get_png_pixel_spacing(image, logger=None):
     return None, None, None, manufacturer, manufacturer_model_name
 
 def get_image_info(image_file, response, logger=None):
-    
     """
     Extract basic metadata from an image file (DICOM or JPEG).
     DICOM images are read using pydicom.dcmread. Non-DICOM images are opened with PIL.Image.open.
     Falls back to "Unknown" for missing DICOM attributes.
+    
     :param image_file: path to the JPEG image file
+    :param response: HTTP response containing image data
+    :param logger: Optional logger for logging warnings and errors
     :return: A tuple containing:
         - width (int): Width of the image in pixels.
         - height (int): Height of the image in pixels.
         - color_scheme (str): Color mode of the image (e.g., 'RGB', 'L', etc.).
     """
-
     info = {
         "file": image_file,
         "file_type": None,
@@ -158,7 +170,7 @@ def get_image_info(image_file, response, logger=None):
             pixel_size = [round(x, 3) for x in pixel_size]
             info["row_spacing"], info["col_spacing"] = map(float, pixel_size)
     else:
-        # Assume JPEG/PNG/etc.
+        # assume JPEG/PNG/etc.
         info["file_type"] = image.format
         info["width"], info["height"] = image.size
         info["color_scheme"] = image.mode
@@ -172,32 +184,18 @@ def apply_gaussian_blur(image, kernel_size=(5, 5), sigma=0):
     """
     Applies a Gaussian blur to the input image to reduce noise and smoothen the image.
 
-    Args:
-        con (sqlite3.Connection, optional): A SQLite database connection for logging the operation. Default is None.
-        image (ndarray): The input image as a NumPy array (grayscale or color) on which to apply Gaussian blur.
-        image_archive_id (int): A unique identifier for the image in the database for tracking.
-        write (bool, optional): If True, logs the operation to the database using the provided connection. Default is True.
-        archive (object, optional): A reference to the archive system (could be used for file-based or DB archiving). Default is None.
-        kernel_size (tuple, optional): The size of the Gaussian kernel. Default is (5, 5).
-        sigma (int, optional): The standard deviation in the X and Y direction for the Gaussian kernel. Default is 0 (auto-calculated).
+    :param image: The input image as a NumPy array (grayscale or color) on which to apply Gaussian blur.
+    :param kernel_size: The size of the Gaussian kernel (default: (5, 5)).
+    :param sigma: The standard deviation in the X and Y direction for the Gaussian kernel (default: 0, which means it is calculated from the kernel size).
 
-    Returns:
-        ndarray: The resulting image after applying Gaussian blur.
-
-    Raises:
-        ValueError: If the input image is None or invalid.
-        sqlite3.Error: If a database error occurs during logging.
-
-    Notes:
-        Gaussian blur is commonly used for reducing image noise and detail.
-        It works by applying a convolution between the image and a Gaussian kernel.
+    :return: The resulting image after applying Gaussian blur as a NumPy array and the method name.
     """
     method_name="gaussian_blur"
-    # Validate the input image
+    # validate the input image
     if image is None:
         raise ValueError("Input image is None. Cannot apply Gaussian blur.")
 
-    # Apply Gaussian blur to the image
+    # apply Gaussian blur to the image
     result_image = cv2.GaussianBlur(image, kernel_size, sigma)
     return result_image, method_name
 
@@ -205,21 +203,12 @@ def apply_edge_enhancement(image, scale=1.0, delta=0, ddepth=cv2.CV_64F):
     """
     Enhances the edges of the input image using the Laplacian operator, emphasizing regions with sharp transitions.
 
-    Args:
-        image (ndarray): The input image as a NumPy array (grayscale or color) to enhance edges.
-        scale (float, optional): Scaling factor for the Laplacian gradient values. Default is 1.0.
-        delta (int, optional): Value added to the results after applying Laplacian. Default is 0.
-        ddepth (int, optional): Desired depth of the destination image. Default is cv2.CV_64F for high precision.
+    :param image: The input image as a NumPy array (grayscale or color) to enhance edges.
+    :param scale: Scaling factor for the Laplacian gradient values (default: 1.0).
+    :param delta: Value added to the results after applying Laplacian (default: 0).
+    :param ddepth: Desired depth of the destination image (default: cv2.CV_64F for high precision).
 
-    Returns:
-        ndarray: The resulting image with enhanced edges.
-
-    Raises:
-        ValueError: If the input image is None or invalid.
-
-    Notes:
-        The Laplacian operator is used to detect edges by calculating the second derivative of the image.
-        The function subtracts the Laplacian from the original image, enhancing the contrast at edges.
+    :return: The resulting image with enhanced edges as a NumPy array and the method name.
     """
     method_name = "edge_enhancement"
     # Validate the input image
@@ -525,28 +514,21 @@ def get_image_as_array(image_file_path, target_size):
         with Image.open(image_file_path) as img:
             img = img.resize(target_size)
             img = img.convert('L')  # convert the image to grayscale
-            x = keras_image.img_to_array(img)
+            x = img_to_array(img)
             ret_val.append(x)
     ret_val = np.array(ret_val)
     return ret_val
 
 def apply_brightness(image, target_brightness=20):
     """
-    @TODO
     Adjusts the brightness of an image to match a target brightness level.
 
-    Args:
-        image (ndarray): The input image as a NumPy array (grayscale or color).
-        target_brightness (int, optional): The desired average brightness of the image. Default is 128.
+    :param image: The input image as a NumPy array (grayscale or color).
+    :param target_brightness: The desired average brightness of the image. Default is 20.
+    :param logger: Optional logger for logging warnings and errors.
 
-    Returns:
-        ndarray: The brightness-adjusted image as a NumPy array.
-        string: name of the method applied to the image
-
-    Raises:
-        ValueError: If the input image is invalid or if the target brightness is outside the valid range (0-255).
+    :return: The brightness-adjusted image as a NumPy array and the method name.
     """
-
     method_name = "adjust_brightness"
     # Validate the input image
     if image is None or not isinstance(image, np.ndarray):
@@ -636,7 +618,7 @@ def measure_image_border_color(image, border_width=10):
     else:
         raise ValueError("Unexpected image format")
 
-def analyze_maus_brightness_median(image, bright_pixel_threshold=200, dark_pixel_threshold=20, median_threshold=180, bright_ratio_threshold=50):
+def analyze_mouse_brightness_median(image, bright_pixel_threshold=200, dark_pixel_threshold=20, median_threshold=180, bright_ratio_threshold=50):
     """
     Analyzes the brightness of a grayscale mouse image based on the median and ratio of bright pixels.
 
@@ -689,7 +671,7 @@ def detect_global_overexposure(image, bg_thresh=150, obj_thresh=160):
     h, w = image.shape
     border = int(0.15 * min(h, w))
 
-    # Masken definieren
+    # define masks for background and object regions
     bg_mask = np.zeros_like(image, dtype=bool)
     bg_mask[:border, :] = True
     bg_mask[-border:, :] = True
@@ -724,18 +706,18 @@ def binarize_images(x, threshold=0.4, logger=None):
     :return: Binarized image or batch of images as a NumPy array with pixel values of 0 or 1.
     """
 
-    # Ensure the input is a NumPy array
+    # ensure the input is a NumPy array
     if not isinstance(x, np.ndarray):
         raise ValueError("Input must be a NumPy array.")
 
-    # Ensure the values are in the expected range [0, 255]
+    # ensure the values are in the expected range [0, 255]
     if np.any(x < 0) or np.any(x > 255):
         raise ValueError("Input array must contain pixel values in the range [0, 255].")
 
-    # Normalize pixel values to the range [0, 1]
+    # normalize pixel values to the range [0, 1]
     x = x / 255.0
 
-    # Binarize the image: pixels >= threshold become 1, and pixels < threshold become 0
+    # binarize the image: pixels >= threshold become 1, and pixels < threshold become 0
     x = np.where(x >= threshold, 1, 0)
 
     return x

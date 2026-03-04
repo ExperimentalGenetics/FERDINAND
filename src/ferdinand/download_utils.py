@@ -1,13 +1,19 @@
 import logging
 import os
-from types import SimpleNamespace
 import requests
 
 import pandas as pd
 
+from types import SimpleNamespace
 from pathlib import Path
 
 from ferdinand.image_utils import detect_file_format, get_image_info
+
+"""
+The module for IMPC metadata and image downloading, including functions to fetch metadata for specified parameters and centers, 
+merge downloaded metadata files into combined dataframes, 
+and download images in either JPEG or original DICOM format while extracting relevant metadata.
+"""
 
 IMPC_ORIGINAL_URL = 'https://www.ebi.ac.uk/mi/media/omero/webgateway/archived_files/download'
 IMPC_JPEG_URL = 'https://www.ebi.ac.uk/mi/media/omero/webgateway/render_image'
@@ -27,8 +33,9 @@ def fetch_metadata(mode: str, my_centers: list,
                    my_parameters: pd.DataFrame, expected_df: pd.DataFrame, dirs: SimpleNamespace, 
                    api_base_url: str, api_fields: str, api_options: str, logger):
     """
-    Downloads metadata for specified parameters and centers from the IMPC API, saves to CSV files, and logs results.
-    
+    Downloads raw CSV metadata files for specified parameters and phenotyping centers from the IMPC API, using the provided API URL, fields, and options. 
+    The function dynamically sets the number of rows to download based on expected data points for each parameter and center, and saves the results to disk.    
+
     :param mode: Description (e.g., "TEST" for limited download, "REAL" for full download)
     :param my_centers: List of phenotyping centers to download data from
     :param my_parameters: DataFrame containing parameters (stable_id) to download metadata for
@@ -103,7 +110,9 @@ def fetch_metadata(mode: str, my_centers: list,
 
 def merge_metadata_files(config: dict, dirs: SimpleNamespace, logger: logging.Logger) -> pd.DataFrame:
     """
-    Merges downloaded metadata CSV files for each center and parameter into combined dataframes, applies filters, and saves results to disk.
+    Reads the raw CSV metadata files for all specified parameters and phenotyping centers, applies filters (e.g., duplicates, pipeline deviation, date of birth), 
+    merges them into combined DataFrames for each center, and then concatenates these into an overall IMPC DataFrame. 
+    The function also saves the combined data for each center and the overall data to disk.
     
     :param config: Configuration dictionary containing parameters, centers, and other settings
     :param dirs: SimpleNamespace containing directory paths for raw data, center-specific data, and combined data storage
@@ -320,12 +329,15 @@ def merge_metadata_files(config: dict, dirs: SimpleNamespace, logger: logging.Lo
     return all_data_df
 
 def get_extension(file_type: str) -> str:
+    """
+    Maps detected file type to corresponding file extension. Defaults to 'bin' if file type is unknown.
+    """
     return IMAGE_FILE_EXTENSION_MAP.get(file_type.upper(), "bin")
 
 def download_image(omero_id, local_image_path, is_jpeg=True, save_local=True, logger=None):
     """
-    Downloads either JPEG or original DICOM format from IMPC servers, detects file type,
-    extracts image metadata (dimensions, spacing), and optionally saves to local disk.
+    Downlaods an image from the IMPC server using the OMERO ID, either in JPEG or original DICOM format, and extracts relevant metadata. 
+    Optionally saves the image to local disk and logs the results. Returns a DataFrame containing the image metadata (dimensions, spacing, file extension, omero_id).
     
     :param omero_id: OMERO image identifier
     :param local_image_path: Local directory path to save image file
@@ -336,31 +348,31 @@ def download_image(omero_id, local_image_path, is_jpeg=True, save_local=True, lo
     :raises RuntimeError: If HTTP request fails or server returns error status code
     """
     
-    # Construct URL based on image format (JPEG or original)
+    # construct URL based on image format (JPEG or original)
     image_url = os.path.join(f"{IMPC_JPEG_URL if is_jpeg else IMPC_ORIGINAL_URL}", str(omero_id))
 
-    # Request image from IMPC server
+    # request image from IMPC server
     response = requests.get(image_url, headers=HEADERS)
 
-    # Check if request was successful
+    # check if request was successful
     if response.status_code == 200:
-        # Detect file format from response headers/content
+        # detect file format from response headers/content
         file_type = detect_file_format(response)
         file_ext = get_extension(file_type)
 
-        # Construct local file path
+        # construct local file path
         local_image_file = os.path.join(local_image_path, f"{omero_id}.{file_ext}")
         
-        # Extract image metadata (width, height, spacing, DPI, etc.)
+        # extract image metadata (width, height, spacing, DPI, etc.)
         image_info = get_image_info(local_image_file, response)
         image_info = pd.DataFrame(image_info, index=[0])
         
-        # Optionally save image file to local disk
+        # optionally save image file to local disk
         if save_local:
             with open(local_image_file, 'wb') as f:
                 f.write(response.content)
   
-        # Process metadata based on image format
+        # process metadata based on image format
         if is_jpeg:
             # For JPEG: keep only relevant columns and rename with 'jpeg_' prefix
             cols_to_keep = [c for c in ['width', 'height', 'row_spacing', 'col_spacing', 'dpi'] if c in image_info.columns]
@@ -372,15 +384,15 @@ def download_image(omero_id, local_image_path, is_jpeg=True, save_local=True, lo
                 'row_spacing': 'jpeg_row_spacing'
             }, inplace=True)
         else:
-            # For DICOM: remove file path and DPI, keep dimension/spacing info
+            # for DICOM: remove file path and DPI, keep dimension/spacing info
             drop_cols = [c for c in ["file", "dpi"] if c in image_info.columns]
             image_info = image_info.drop(columns=drop_cols)
             image_info['file_extension'] = file_ext
 
-        # Add OMERO ID to metadata
+        # add OMERO ID to metadata
         image_info['omero_id'] = omero_id
         
-        # Log results if logger provided
+        # log results if logger provided
         if logger is not None:
             for idx, row in image_info.iterrows():
                 logger.debug(f"{row}\n")
@@ -388,5 +400,5 @@ def download_image(omero_id, local_image_path, is_jpeg=True, save_local=True, lo
         
         return image_info
     else:
-        # Raise error if request failed
+        # raise error if request failed
         raise RuntimeError(f" Request failed for {image_url} with status code {response.status_code}")

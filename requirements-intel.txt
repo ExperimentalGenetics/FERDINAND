@@ -64,7 +64,6 @@ jupyterlab
 jupyterlab_pygments
 jupyterlab_server
 jupyterlab_widgets
-keras
 kiwisolver
 lark
 lazy_loader
