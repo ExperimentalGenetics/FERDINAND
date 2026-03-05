@@ -41,12 +41,16 @@ http://localhost:8888
 
 ## Purpose
 
-FERDINAnD provides an end-to-end pipeline to fetch, curate, preprocess and prepare 2D radiograph image data from the IMPC for downstream AI workflows. It focuses on:
+FERDINAnD is an end-to-end framework for building AI-ready datasets from IMPC 2D radiographs. It supports the full workflow from data acquisition to curation and quality control, and can be run either locally or via Docker.
 
-- Automated data acquisition (IMPC Solr image API) and per-center CSV collection (`notebooks/100_fetch_data_from_impc.ipynb`).
-- Robust image download and metadata extraction (`notebooks/200_download_impc_radiographs.ipynb`, `src/ferdinand/download_utils.py`).
-- Per-center, center-specific preprocessing tuned for different data sources and QC (`notebooks/300_preprocess_dataset.ipynb`, `src/ferdinand/preprocess_and_qc.py`, `src/ferdinand/image_utils.py`).
-- Light-weight metadata storage and bookkeeping via SQLite (`src/ferdinand/sqlite_utils.py`) so downstream steps can resume safely.
+Core capabilities:
+
+- Automated metadata collection from the IMPC Solr image API (`notebooks/100_fetch_data_from_impc.ipynb`).
+- Reliable image download and organization for downstream processing (`notebooks/200_download_impc_images.ipynb`, `src/ferdinand/download_utils.py`).
+- Center-aware preprocessing and QC for heterogeneous image sources (`notebooks/300_preprocess_dataset.ipynb`, `src/ferdinand/preprocess_and_qc.py`, `src/ferdinand/image_utils.py`).
+- Dataset curation and clustering-assisted review (`notebooks/310_curate_dataset.ipynb`, `src/ferdinand/clustering_utils.py`).
+- Orientation analysis and image rotation for standardization (`notebooks/400_rotate_images.ipynb`, `src/ferdinand/model_setup.py`, `src/ferdinand/image_utils.py`).
+- Reproducible metadata tracking and resume-safe bookkeeping through SQLite (`src/ferdinand/sqlite_utils.py`).
 
 See the `notebooks/` directory for runnable, documented pipeline steps and `src/ferdinand/` for the programmatic APIs used by the notebooks.
 
