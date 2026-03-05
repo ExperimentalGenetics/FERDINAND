@@ -7,7 +7,8 @@ An open framework for access and AI-ready preprocessing of IMPC 2D radiographs.
 Recommended for new users: run FERDINAnD with Docker.
 
 1. Check prerequisites:
-   - Docker Desktop is running
+   - On macOS/Windows: Docker Desktop is running
+   - On Ubuntu/Linux: Docker Engine is running
    - `docker compose` is available
 2. Review `config/config.yml`:
    - `run_name`
@@ -46,7 +47,8 @@ See the `notebooks/` directory for runnable, documented pipeline steps and `src/
 ## Prerequisites
 
 - Docker path:
-  - Docker Desktop
+  - macOS/Windows: Docker Desktop
+  - Ubuntu/Linux: Docker Engine
   - Docker Compose v2 (`docker compose`)
 - Local Python path:
   - Python 3.10
