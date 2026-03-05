@@ -31,7 +31,8 @@ http://localhost:8888
    - `notebooks/200_download_impc_images.ipynb`
    - `notebooks/300_preprocess_dataset.ipynb`
    - `notebooks/310_curate_dataset.ipynb`
-   - optional: `notebooks/320_check_image_quality.ipynb`, `notebooks/400_rotate_images.ipynb`
+   - `notebooks/320_check_image_quality.ipynb`
+   - `notebooks/400_rotate_images.ipynb`
 
 ## Purpose
 
