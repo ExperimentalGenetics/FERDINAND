@@ -2,3 +2,13 @@
 __pycache__/
 .ipynb_checkpoints/
 *.pyc
+requirements.txt
+*.egg-info
+config/configure.py
+logs/
+data/
+reports/
+.DS_Store
+full_data
+models/
+docker/.env.compose
