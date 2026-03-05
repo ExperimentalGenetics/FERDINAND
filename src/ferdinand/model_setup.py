@@ -3,8 +3,8 @@ import tensorflow as tf
 
 from tensorflow.keras.layers import Input, Conv2D, BatchNormalization, Activation, MaxPooling2D
 from tensorflow.keras.layers import GlobalAveragePooling2D, Dense, Dropout, Add
-from tensorflow.keras.layers import Model
-from tensorflow.keras.layers import l2
+from tensorflow.keras.models import Model
+from tensorflow.keras.regularizers import l2
 
 """
 This module defines the CNN architecture for predicting angles from X-ray images. 

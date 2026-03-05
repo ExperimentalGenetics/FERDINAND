@@ -7,7 +7,7 @@ import PIL.ImageOps as ImageOps
 
 from pydicom.errors import InvalidDicomError
 from pydicom.misc import is_dicom
-from tensorflow.keras.preprocessing import img_to_array
+from tensorflow.keras.utils import img_to_array
 from PIL import Image
 from io import BytesIO
 

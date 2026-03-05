@@ -175,3 +175,4 @@ transformers
 timm
 umap-learn
 ipynbname
+scikit-optimize

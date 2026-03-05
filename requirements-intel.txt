@@ -176,3 +176,4 @@ leidenalg
 transformers
 timm
 ipynbname
+scikit-optimize

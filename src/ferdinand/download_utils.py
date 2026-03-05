@@ -234,7 +234,10 @@ def merge_metadata_files(config: dict, dirs: SimpleNamespace, logger: logging.Lo
                 df["mouse_id"] = df["center"].astype(str) + "_" + df["external_sample_id"].astype(str)
             
                 # 3) sort columns
-                df = df[list(my_mouse_columns) + ['impc_file_type', 'omero_id', 'date_of_experiment'] + list(additional_api_fields)]
+                if additional_api_fields:
+                    df = df[list(my_mouse_columns) + ['impc_file_type', 'omero_id', 'date_of_experiment'] + list(additional_api_fields)]
+                else:
+                    df = df[list(my_mouse_columns) + ['impc_file_type', 'omero_id', 'date_of_experiment']]
                 for col in ['parameter_association_name', 'parameter_association_stable_id', 'parameter_association_value']:
                     if col not in df.columns:
                         continue

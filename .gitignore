@@ -11,3 +11,4 @@ reports/
 .DS_Store
 full_data
 models/
+docker/.env.compose
