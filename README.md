@@ -4,6 +4,11 @@ An open framework for access and AI-ready preprocessing of IMPC 2D radiographs.
 
 ## Getting Started
 
+There are two supported ways to run FERDINAnD:
+
+1. Local installation (Python environment on your machine)
+2. Docker-based run (recommended)
+
 Recommended for new users: run FERDINAnD with Docker.
 
 1. Check prerequisites:
