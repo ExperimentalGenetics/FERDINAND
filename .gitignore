@@ -6,9 +6,9 @@ requirements.txt
 *.egg-info
 config/configure.py
 logs/
-data/
+data
 reports/
 .DS_Store
-full_data
+data_local/
 models/
 docker/.env.compose

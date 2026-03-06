@@ -3,8 +3,8 @@
 
 # Settings related to the dataset creation pipeline run, 
 # including the name and description of the run, the data source, and the IMPC centers to be included in the dataset.
-run_mode: &run_mode "TEST"  # Options: REAL=download everything, TEST=only 20 rows
-run_name: &run_name "DR23_2025-09-23_test_run"  # A name for the dataset creation pipeline run, to be used in the directory structure of the dataset and in the reports.
+run_mode: &run_mode "REAL"  # Options: REAL=download everything, TEST=only 20 rows
+run_name: &run_name "DR23_2025-09-23"  # A name for the dataset creation pipeline run, to be used in the directory structure of the dataset and in the reports.
 run_description: &run_description "Dataset creation pipeline run for the DR23 release of the IMPC radiographs"
 data_source: &data_source "IMPC"
 

@@ -3,6 +3,7 @@ import logging
 import os
 import math
 import cv2
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -344,11 +345,17 @@ def create_thumbnail_gallery(data: pd.DataFrame,
     :param source_dir: Base directory where original images are stored (used for linking).
     :param alignment_details: Whether to include alignment details in the gallery (default: False).
     """
-    html_file = os.path.join(html_dir, html_file_name)
+    html_dir_abs = os.path.abspath(html_dir)
+    thumbnails_dir_abs = os.path.abspath(thumbnails_dir)
+    source_dir_abs = os.path.abspath(source_dir)
+    os.makedirs(html_dir_abs, exist_ok=True)
+
+    html_file = os.path.join(html_dir_abs, html_file_name)
     print(f"Creating thumbnail gallery at: {html_file}")
 
-    # path relative to the thumbnails directory
-    # source_dir = os.path.join('..', os.path.basename(source_dir))
+    def _href_from_html(target_file: str) -> str:
+        # Build browser-friendly relative links from html location to file location.
+        return Path(os.path.relpath(os.path.abspath(target_file), html_dir_abs)).as_posix()
 
     with open(html_file, "w") as f:
         f.write(f"<html><body><h2>{title}</h2>")
@@ -363,23 +370,27 @@ def create_thumbnail_gallery(data: pd.DataFrame,
                 f.write(f"<h3>Center: {center} ({total} images) </h3></br>")
              
             for idx, row in _df.iterrows():
-                orig_file = os.path.join(build_local_image_dir(source_dir, row['center'], row['cohort_type'], row['gene_symbol'], row['sex']), 
-                                         f"{row['omero_id']}.jpg")
-                orig_file = os.path.relpath(orig_file, html_dir)
-                thumb_file = os.path.join(build_local_image_dir(thumbnails_dir, row['center'], row['cohort_type'], row['gene_symbol'], row['sex']), 
-                                          f"{row['omero_id']}.jpg")
-                thumb_file = os.path.relpath(thumb_file, html_dir)
+                orig_file = os.path.join(
+                    build_local_image_dir(source_dir_abs, row['center'], row['cohort_type'], row['gene_symbol'], row['sex']),
+                    f"{row['omero_id']}.jpg"
+                )
+                thumb_file = os.path.join(
+                    build_local_image_dir(thumbnails_dir_abs, row['center'], row['cohort_type'], row['gene_symbol'], row['sex']),
+                    f"{row['omero_id']}.jpg"
+                )
+                orig_href = _href_from_html(orig_file)
+                thumb_href = _href_from_html(thumb_file)
                 # f.write(f'<a href="{orig_file}"><img src="{thumb_file}" width="128" ></a> ')
                 if alignment_details:
                     f.write(f'''
                             <div style="display:inline-block; text-align:center;">
-                            <a href="{orig_file}"><img src="{thumb_file}" width="128"></a><br>
+                            <a href="{orig_href}"><img src="{thumb_href}" width="128"></a><br>
                             {row['omero_id']} ({row['fst_angle_prediction']}°/{row['snd_angle_prediction']}°)
                             </div>''')
                 else:
                     f.write(f'''
                             <div style="display:inline-block; text-align:center;">
-                            <a href="{orig_file}"><img src="{thumb_file}" width="128"></a><br>
+                            <a href="{orig_href}"><img src="{thumb_href}" width="128"></a><br>
                             {row['omero_id']}
                             </div>''')
         f.write("</body></html>")
