@@ -98,6 +98,10 @@ def angle_error(y_true, y_pred):
     Calculate the mean difference between the true angles
     and the predicted angles. Each angle is represented
     as a binary vector (one-hot encoded).
+
+    :param y_true: True angles (one-hot encoded)
+    :param y_pred: Predicted angles (one-hot encoded)
+    :return: Mean angle error in degrees
     """
     true_angles = tf.argmax(y_true, axis=-1)
     pred_angles = tf.argmax(y_pred, axis=-1)
@@ -108,5 +112,9 @@ def angle_error(y_true, y_pred):
 def angle_difference(x, y):
     """
     Calculate minimum difference between two angles.
+
+    :param x: First angle (in degrees)
+    :param y: Second angle (in degrees)
+    :return: Minimum difference between the two angles (in degrees)
     """
     return 180 - abs(abs(x - y) - 180)
