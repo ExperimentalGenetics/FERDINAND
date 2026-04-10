@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = ROOT / "config" / "config.yml"
 OUTPUT_PATH = Path(__file__).resolve().parent / ".env.compose"
 
-KEYS = ("data_dir", "models_dir", "reports_dir")
+KEYS = ("data_dir", "models_dir", "reports_dir", "docker_group_id", "jupyter_host", "jupyter_port")
 LINE_RE = re.compile(r"^(?P<key>[a-zA-Z0-9_]+)\s*:\s*(?P<value>.+?)\s*$")
 
 
@@ -74,6 +74,9 @@ def main() -> int:
         f"FERDINAND_DATA_MOUNT={_to_mount(config_values['data_dir'])}",
         f"FERDINAND_MODELS_MOUNT={_to_mount(config_values['models_dir'])}",
         f"FERDINAND_REPORTS_MOUNT={_to_mount(config_values['reports_dir'])}",
+        f"FERDINAND_GROUP_ID={config_values['docker_group_id']}",
+        f"FERDINAND_JUPYTER_HOST={config_values['jupyter_host']}",
+        f"FERDINAND_JUPYTER_PORT={config_values['jupyter_port']}",
         "",
     ]
     OUTPUT_PATH.write_text("\n".join(lines), encoding="utf-8")
