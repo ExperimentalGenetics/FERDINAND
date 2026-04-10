@@ -127,7 +127,7 @@ The compose mounts for data, models and reports are generated from `config/confi
 The helper script reads `data_dir`, `models_dir` and `reports_dir` from `config/config.yml`, writes `.env.compose`, and runs:
 
 ```bash
-docker compose -f docker/docker-compose.yml --env-file docker/.env.compose ...
+docker compose -f docker/compose.yml --env-file docker/.env.compose ...
 ```
 
 To only refresh the env file:
