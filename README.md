@@ -82,14 +82,24 @@ See the `notebooks/` directory for runnable, documented pipeline steps and `src/
 
 Build and start the project (JupyterLab on port `8888`):
 
+- Without Traefik:
 ```bash
 ./docker/compose.sh up -d --build
+```
+- With Traefik (uses configured hostname in `config.yml`, e.g. `jupyter_host`):
+```bash
+./docker/compose.sh --traefik up -d --build
 ```
 
 Open JupyterLab in your browser:
 
+- Without Traefik:
 ```text
 http://localhost:8888
+```
+- With Traefik (uses configured hostname in `config.yml`, e.g. `jupyter_host`):
+```text
+https://<jupyter_host>/lab
 ```
 
 Show logs:
