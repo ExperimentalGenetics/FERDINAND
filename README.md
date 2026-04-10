@@ -15,21 +15,34 @@ Recommended for new users: run FERDINAnD with Docker.
    - On macOS/Windows: Docker Desktop is running
    - On Ubuntu/Linux: Docker Engine is running
    - `docker compose` is available
-2. Review `config/config.yml`:
+2. Create `config/config.yml` from `config/config.example.yml`, the review the following settings:
    - `run_name`
    - `project_root`
    - `data_dir`, `models_dir`, `reports_dir`
+   - `angle_detection_model`
+   - `docker_group_id`, `jupyter_host`, `jupyter_port`
+4. Make sure following directories exist:
+   - `data` (for dataset storage)
+   - `reports` (for pipeline outputs and reports)
+   - `models` (must contained the angle detection model required for image alignment)
 3. Start the project:
-
-```bash
-./docker/compose.sh up -d --build
-```
-
+   - Without Traefik:
+   ```bash
+   ./docker/compose.sh up -d --build
+   ```
+   - With Traefik (uses configured hostname in `config.yml`, e.g. `jupyter_host`):
+   ```bash
+   ./docker/compose.sh --traefik up -d --build
+   ```
 4. Open JupyterLab:
-
-```text
-http://localhost:8888
-```
+   - Without Traefik:
+   ```text
+   http://localhost:8888
+   ```
+   - With Traefik (uses configured hostname in `config.yml`, e.g. `jupyter_host`):
+   ```text
+   https://<jupyter_host>/lab
+   ```
 
 5. Run notebooks in order:
    - `notebooks/100_fetch_data_from_impc.ipynb`
