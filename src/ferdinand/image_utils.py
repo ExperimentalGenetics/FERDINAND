@@ -69,15 +69,21 @@ def get_png_pixel_spacing(image, logger=None):
         if logger:
             logger.error(error_msg)
         raise TypeError(error_msg)
+
+    metadata = {}
+    metadata.update(getattr(image, "info", {}))
+    metadata.update(getattr(image, "text", {}))
+
+    # print(f"Available metadata keys: {list(metadata.keys())}")
     
     # extract manufacturer metadata if available
-    manufacturer = image.info.get('dcm:Manufacturer')
-    manufacturer_model_name = image.info.get("dcm:Manufacturer'sModelName")
+    manufacturer = metadata.get('dcm:Manufacturer')
+    manufacturer_model_name = metadata.get("dcm:Manufacturer'sModelName")
     
     spacing_keys = ['dcm:PixelSpacing', 'dcm:ImagerPixelSpacing']
 
     for key in spacing_keys:
-        raw_spacing = image.info.get(key)
+        raw_spacing = metadata.get(key)
         
         if not raw_spacing:
             continue
@@ -110,7 +116,7 @@ def get_png_pixel_spacing(image, logger=None):
 
 def get_image_info(image_file, response, logger=None):
     """
-    Extract basic metadata from an image file (DICOM or JPEG).
+    Extract basic metadata from an image file (DICOM or JPEG/PNG).
     DICOM images are read using pydicom.dcmread. Non-DICOM images are opened with PIL.Image.open.
     Falls back to "Unknown" for missing DICOM attributes.
     
@@ -177,6 +183,7 @@ def get_image_info(image_file, response, logger=None):
         info["dpi"] = str(image.info.get("dpi"))
         if image.format == 'PNG':
             spacing_method, info["row_spacing"], info["col_spacing"], info["manufacturer"], info["manufacturer_model_name"] = get_png_pixel_spacing(image)
+            # print(spacing_method, info["row_spacing"], info["col_spacing"], info["manufacturer"], info["manufacturer_model_name"])
 
     return info
 
