@@ -15,3 +15,5 @@ models
 docker/.env.compose
 notebooks/TEST_notebook.ipynb
 .env
+test/
+notebooks/annotations.csv

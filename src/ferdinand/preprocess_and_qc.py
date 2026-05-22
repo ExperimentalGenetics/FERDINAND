@@ -4,6 +4,8 @@ import cv2
 import numpy as np
 import pandas as pd
 
+from tqdm import tqdm
+
 from ferdinand.utils import build_local_image_dir
 
 import ferdinand.sqlite_utils as sqlutl
@@ -306,9 +308,20 @@ def preprocess_image(conn, db_table, center, image_file_path, source_path, targe
         raise IOError(f"Failed to write image: {preproc_file_path}")
 
     if pad_to_square:
+        if center in ['BCM', 'MRC Harwell', 'ICS', 'RBRC', 'TCP']:
+            center_mode = "bbox"
+        else:
+            center_mode = "centroid"
         # pad to square, if defined
-        preproc_image = imgutl.pad_image_to_square(preproc_image.copy())
-    
+        preproc_image = imgutl._center_mouse_on_square(
+            preproc_image.copy(),
+            use_replicate=False,
+            center_mode=center_mode,
+            output_mode="fixed_then_crop",
+        )
+        # preproc_image = imgutl.center_mouse_fixed_square(preproc_image.copy())
+        # preproc_image = imgutl.pad_image_to_square(preproc_image.copy()) 
+        
     # save the pre-processed image
     if preproc_image is None:
         raise ValueError("Invalid image data provided. The image cannot be None or empty.")
@@ -343,7 +356,10 @@ def preprocess_images(conn, db_table, center, image_files, source_path, target_p
     :return: List of file paths to the pre-processed images.
     """
     preproc_img_files = []
-    for img_file in image_files:
+    pbar = tqdm(image_files, desc="Preprocessing images")
+    
+    for img_file in pbar:
+        pbar.set_postfix_str(str(img_file))
         try: 
             preproc_img_file, preproc_img, preproc_methods = preprocess_image(conn=conn, 
                                                                               db_table=db_table,
@@ -354,9 +370,11 @@ def preprocess_images(conn, db_table, center, image_files, source_path, target_p
                                                                               pad_to_square=pad_to_square, 
                                                                               logger=logger)
             preproc_img_files.append(preproc_img_file)
+            
         except (FileNotFoundError, ValueError, IOError) as e: 
             logger.error(f"could not preprocess image {img_file}: {e}")
             continue
+    print()
     if no_of_images_to_show > 0 and len(preproc_img_files) > 0:  
         utl.plot_image_grid(image_files=preproc_img_files[:no_of_images_to_show], cols=5)
 
@@ -572,7 +590,10 @@ def load_and_rotate_images(conn, db_table, image_files, source_path, target_path
     """
 
     rotated_img_files = []
-    for img_file in image_files:
+    pbar = tqdm(image_files, desc="Rotating images")
+    for img_file in pbar:
+        pbar.set_postfix_str(f"{img_file}")
+    # for img_file in image_files:
         try: 
             rotated_img_file, rotated_image, rotation_angle = load_and_rotate_image(conn=conn, 
                                                                                     db_table=db_table,

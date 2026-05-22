@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from PIL import Image
+from tqdm import tqdm
 
 from ferdinand import sqlite_utils as sqlutl
 
@@ -295,7 +296,10 @@ def create_and_save_thumbnails(data: pd.DataFrame, centers: list,
     for center in centers:
         df_center = data[data.center == center]
 
-        for row in df_center.itertuples(index=False):
+        pbar = tqdm(df_center.itertuples(index=False), desc="Thumbnails creation")
+
+        for row in pbar:
+        # for row in df_center.itertuples(index=False):
             input_dir = build_local_image_dir(
                 path2images,
                 row.center,
@@ -304,6 +308,8 @@ def create_and_save_thumbnails(data: pd.DataFrame, centers: list,
                 row.sex,
             )
             input_path = os.path.join(input_dir, f"{row.omero_id}.jpg")
+
+            pbar.set_postfix_str(f"{center}: {input_path}")
 
             output_dir = build_local_image_dir(
                 path2thumbnails,

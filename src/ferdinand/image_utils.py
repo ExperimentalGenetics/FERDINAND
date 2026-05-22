@@ -468,12 +468,12 @@ def pad_image_to_square(image, border_width=10):
 
     # calculate the average color of the borders based on the specified border width
     if top_padding > 0:  # Vertikales Padding
-        edge_pixels = np.concatenate([image[:border_width, :], image[-border_width:, :]])  # Die ersten und letzten `border_width` Zeilen
+        edge_pixels = np.concatenate([image[:border_width, :], image[-border_width:, :]])  
     else:  # horizontal padding
-        edge_pixels = np.concatenate([image[:, :border_width], image[:, -border_width:]])  # Die ersten und letzten `border_width` Spalten
+        edge_pixels = np.concatenate([image[:, :border_width], image[:, -border_width:]])  
 
     # compute the average color of the edge pixels
-    avg_color = np.mean(edge_pixels, axis=(0, 1)).astype(np.uint8)  # Mittelt über Höhe und Breite
+    avg_color = np.mean(edge_pixels, axis=(0, 1)).astype(np.uint8)  
 
     # generate the padding and concatenate it to the original image
     if left_padding > 0 or right_padding > 0:
@@ -484,6 +484,86 @@ def pad_image_to_square(image, border_width=10):
         image = np.vstack([horizontal_pad, image, np.full((bottom_padding, image.shape[1]), avg_color, dtype=np.uint8)])
 
     return image
+
+def center_mouse_on_square(
+    img,
+    use_replicate=False,
+    center_mode="bbox",       # "bbox" | "centroid"
+    output_mode="fixed_then_crop",  # "fixed_max" | "fit_centered" | "fixed_then_crop"
+):
+    h, w = img.shape[:2]
+    fixed_size = max(h, w)
+
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if img.ndim == 3 else img
+
+    _, mask = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    ys, xs = np.where(mask > 0)
+    if len(xs) == 0 or len(ys) == 0:
+        raise ValueError("No object found.")
+
+    x_min, x_max = xs.min(), xs.max()
+    y_min, y_max = ys.min(), ys.max()
+
+    if center_mode == "centroid":
+        mouse_cx = int(xs.mean())
+        mouse_cy = int(ys.mean())
+    else:
+        mouse_cx = (x_min + x_max) // 2
+        mouse_cy = (y_min + y_max) // 2
+
+    if output_mode == "fixed_max":
+        work_size = fixed_size
+    else:
+        half_size = max(
+            mouse_cx,
+            w - 1 - mouse_cx,
+            mouse_cy,
+            h - 1 - mouse_cy
+        )
+        work_size = int(2 * half_size + 1)
+
+    target_cx = work_size // 2
+    target_cy = work_size // 2
+    tx = target_cx - mouse_cx
+    ty = target_cy - mouse_cy
+
+    M = np.float32([[1, 0, tx], [0, 1, ty]])
+
+    if use_replicate:
+        centered = cv2.warpAffine(
+            img,
+            M,
+            (work_size, work_size),
+            flags=cv2.INTER_LINEAR,
+            borderMode=cv2.BORDER_REPLICATE
+        )
+    else:
+        border_pixels = np.concatenate([
+            gray[:10, :].ravel(),
+            gray[-10:, :].ravel(),
+            gray[:, :10].ravel(),
+            gray[:, -10:].ravel()
+        ])
+        bg = int(np.median(border_pixels))
+        value = bg if img.ndim == 2 else [bg] * img.shape[2]
+
+        centered = cv2.warpAffine(
+            img,
+            M,
+            (work_size, work_size),
+            flags=cv2.INTER_LINEAR,
+            borderMode=cv2.BORDER_CONSTANT,
+            borderValue=value
+        )
+
+    if output_mode != "fixed_then_crop":
+        return centered
+
+    start = (work_size - fixed_size) // 2
+    end = start + fixed_size
+    cropped = centered[start:end, start:end]
+
+    return cropped
 
 def get_image_as_array(image_file_path, target_size):
     """
