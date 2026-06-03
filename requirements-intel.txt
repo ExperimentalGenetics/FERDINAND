@@ -177,3 +177,4 @@ transformers
 timm
 ipynbname
 scikit-optimize
+colorcet

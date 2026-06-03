@@ -25,6 +25,13 @@ from skopt import gp_minimize
 from skopt.space import Integer, Real
 from skopt.plots import plot_convergence, plot_objective
 
+from sklearn.decomposition import PCA
+import umap
+
+import colorcet as cc
+from matplotlib.colors import ListedColormap, BoundaryNorm
+from collections import Counter
+
 """
 This script provides image clustering utilities using deep learning and 
 graph-based community detection.
@@ -416,3 +423,114 @@ def analyze_sensitivity(features, result, n_samples=20, seed=42, output_dir=None
     plt.show()
     
     return results
+
+def compute_and_plot_pca(labels, features, output_dir=None):
+    
+    pca = PCA(n_components=2)
+    reduced = pca.fit_transform(features)
+
+    plt.figure(figsize=(8, 6))
+    plt.scatter(reduced[:, 0], reduced[:, 1], c=labels, s=10)
+    plt.title(f"Leiden Clustering (PCA, JPEG Features)")
+
+    if output_dir:
+        filename = os.path.join(clu_analysis_dir, str(center).replace(" ", "_").replace("/", "_"), "leiden_clustering_PCA.png")
+        plt.savefig(filename, dpi=300, bbox_inches="tight")
+    
+    plt.show()
+    plt.close()
+
+def plot_embedding(labels, features, method="umap", annotate_clusters=False, output_file=None,):
+
+    labels = np.asarray(labels)
+
+    if method.lower() == "umap":
+        reducer = umap.UMAP(
+            n_components=2,
+            random_state=42
+        )
+        reduced = reducer.fit_transform(features)
+        x_label = "UMAP-1"
+        y_label = "UMAP-2"
+        title = "Leiden Clustering (UMAP)"
+    elif method.lower() == "pca":
+        reducer = PCA(n_components=2)
+        reduced = reducer.fit_transform(features)
+        x_label = "PC1"
+        y_label = "PC2"
+        title = "Leiden Clustering (PCA)"
+    else:
+        raise ValueError(
+            f"Unknown method '{method}'. "
+            "Supported methods: 'umap', 'pca'."
+        )
+
+    unique_labels = np.sort(np.unique(labels))
+    n_clusters = len(unique_labels)
+
+    cmap = ListedColormap(cc.glasbey[:n_clusters])
+    bounds = np.arange(n_clusters + 1) - 0.5
+    norm = BoundaryNorm(bounds, cmap.N)
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    sc = ax.scatter(reduced[:, 0], reduced[:, 1], 
+                    c=labels, s=10, cmap=cmap, norm=norm, alpha=0.7)
+
+    cbar = plt.colorbar(sc, ax=ax)
+    cbar.set_label("Cluster")
+
+    if n_clusters > 25:
+        step = int(np.ceil(n_clusters / 25))
+        shown_labels = unique_labels[::step]
+    else:
+        shown_labels = unique_labels
+
+    cbar.set_ticks(shown_labels)
+    cbar.set_ticklabels(shown_labels)
+
+    if annotate_clusters:
+        for cluster_id in shown_labels:
+            mask = labels == cluster_id
+
+            pts = reduced[mask]
+            center = pts.mean(axis=0)
+
+            # Punkt innerhalb des Clusters nahe am Schwerpunkt
+            idx = np.argmin(
+                np.sum((pts - center) ** 2, axis=1)
+            )
+
+            x_text, y_text = pts[idx]
+
+            ax.text(
+                x_text,
+                y_text,
+                str(cluster_id),
+                fontsize=8,
+                fontweight="bold",
+                ha="center",
+                va="center",
+                bbox=dict(
+                    facecolor="white",
+                    alpha=0.7,
+                    edgecolor="none",
+                    pad=1,
+                ),
+            )
+
+    ax.set_title(title)
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
+
+    plt.tight_layout()
+
+    if output_file:
+        fig.savefig(
+            output_file,
+            dpi=300,
+            bbox_inches="tight"
+        )
+
+    plt.show()
+    return fig

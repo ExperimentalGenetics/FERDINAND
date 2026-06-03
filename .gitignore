@@ -3,6 +3,7 @@ __pycache__
 .ipynb_checkpoints
 *.pyc
 requirements.txt
+requirement.txt
 *.egg-info
 config/configure.py
 config/config.yml
