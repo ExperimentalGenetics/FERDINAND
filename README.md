@@ -1,4 +1,4 @@
-# FERDINAnD
+# FERDINAND
 
 An open framework for access and AI-ready preprocessing of IMPC 2D radiographs.
 
