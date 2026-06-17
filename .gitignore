@@ -18,3 +18,4 @@ notebooks/TEST_notebook.ipynb
 .env
 test/
 notebooks/annotations.csv
+xray-pipeline.png
