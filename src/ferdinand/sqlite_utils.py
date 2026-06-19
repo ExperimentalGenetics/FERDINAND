@@ -6,7 +6,11 @@ import random
 import pandas as pd
 
 """
-This module provides utility functions for interacting with a SQLite database containing metadata about images downloaded from the IMPC.
+SQLite helpers for IMPC image metadata tables.
+
+The module provides small utilities for connecting to the database, selecting
+rows, sampling work batches, updating image metadata, and evolving table
+schemas as preprocessing and QC steps add new columns.
 """
 
 DTYPE_MAP = {
@@ -17,11 +21,24 @@ DTYPE_MAP = {
 
 def connect_db(sqlite_file):
     """
-    Connect to the SQLite database at the specified file path. Raises an error if the file does not exist or connection fails.
-    :param sqlite_file: path to the SQLite database file
-    :return: sqlite3.Connection object if connection is successful
-    :raises FileNotFoundError: If the specified SQLite file does not exist
-    :raises sqlite3.OperationalError: If there is an error connecting to the database
+    Open a connection to an existing SQLite database file.
+
+    Parameters
+    ----------
+    sqlite_file : str | os.PathLike
+        Path to the SQLite database file.
+
+    Returns
+    -------
+    sqlite3.Connection
+        Active SQLite connection.
+
+    Raises
+    ------
+    FileNotFoundError
+        Raised when the database file does not exist.
+    sqlite3.OperationalError
+        Raised when SQLite cannot open the database.
     """
     if os.path.exists(sqlite_file):
         try:
@@ -34,10 +51,28 @@ def connect_db(sqlite_file):
     
 def remove_files_with_ambiguous_omero_ids(conn, db_table, logger=None):
     """
-    Remove records from the specified database table where the same OMERO ID appears more than once, indicating ambiguity in image metadata.
-    :param conn: active sqlite3 connection to database
-    :param db_table: name of the table to clean
-    :param logger: optional logger instance for logging results
+    Delete rows whose OMERO ID occurs more than once in a table.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection
+        Active SQLite connection.
+    db_table : str
+        Table to clean.
+    logger : logging.Logger, optional
+        Logger used for status and error reporting.
+
+    Returns
+    -------
+    None
+        The function deletes ambiguous rows in place and commits the change.
+
+    Raises
+    ------
+    ValueError
+        Raised when `db_table` fails validation.
+    sqlite3.Error
+        Raised when the delete operation fails.
     """
     # validate table name to prevent SQL injection
     if not db_table.replace('_', '').isalnum():
@@ -62,12 +97,30 @@ def remove_files_with_ambiguous_omero_ids(conn, db_table, logger=None):
     
 def select_rows(conn, db_table, center=None, logger=None):
     """
-    Select rows from the specified database table, optionally filtered by center. Returns a pandas DataFrame with the results.
-    :param conn: active sqlite3 connection to database
-    :param db_table: name of the table to query
-    :param center: name of the center to filter by (optional)
-    :param logger: optional logger instance for logging results
-    :return: pandas.DataFrame with the queried records
+    Select rows from a table, optionally filtered by center.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection
+        Active SQLite connection.
+    db_table : str
+        Table to query.
+    center : str | None, optional
+        Optional center name used as a filter.
+    logger : logging.Logger, optional
+        Logger used for status and error reporting.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Query result as a dataframe.
+
+    Raises
+    ------
+    ValueError
+        Raised when `db_table` fails validation.
+    sqlite3.Error
+        Raised when the query fails.
     """
     # Validate table name to prevent SQL injection
     if not db_table.replace('_', '').isalnum():
@@ -94,24 +147,51 @@ def select_rows(conn, db_table, center=None, logger=None):
 
 def select_rows_by_column(conn, db_table, column, value, logger=None):
     """
-    Select rows from a SQL table based on a single column-value pair. If the value is None, selects rows where the column IS NULL.
-    :param conn: active sqlite3 connection to database
-    :param db_table: name of the table to query
-    :param column: name of the column to filter by (validated against table schema)
-    :param value: value to match in the specified column (can be None for IS NULL check)
-    :param logger: optional logger instance for logging results
-    :return: pandas.DataFrame with the queried records
+    Select rows using one column/value filter.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection
+        Active SQLite connection.
+    db_table : str
+        Table to query.
+    column : str
+        Column used as the filter key.
+    value : object
+        Value to match. `None` produces an `IS NULL` predicate.
+    logger : logging.Logger, optional
+        Currently unused placeholder for interface consistency.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Query result as a dataframe.
     """
     return select_rows_by_columns(conn, db_table, filters={column: value})  
 
 def select_rows_by_columns(conn, db_table, filters: dict):
     """
-    Select rows from a SQL table based on multiple column-value pairs. If a value is None, selects rows where the column IS NULL.
-    :param conn: active sqlite3 connection to database
-    :param db_table: name of the table to query
-    :param filters: dictionary of column-value pairs to filter by (value can be None for IS NULL check)
-    :type filters: dict
-    :return: pandas.DataFrame with the queried records
+    Select rows using multiple column/value filters.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection
+        Active SQLite connection.
+    db_table : str
+        Table to query.
+    filters : dict
+        Mapping of column names to desired values. `None` values produce
+        `IS NULL` predicates.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Query result as a dataframe.
+
+    Raises
+    ------
+    ValueError
+        Raised when any requested filter column is absent from the table.
     """
     # check which column exists
     table_info = pd.read_sql_query(f"PRAGMA table_info({db_table})", conn)
@@ -142,15 +222,30 @@ def select_rows_by_columns(conn, db_table, filters: dict):
 
 def select_random_rows_by_column(conn, db_table, num_rows: int, column, value, center=None, logger=None):
     """
-    Select a random sample of rows from the specified database table where the given column matches the specified value, optionally filtered by center. Returns a pandas DataFrame with the results.
-    :param conn: active sqlite3 connection to database
-    :param db_table: name of the table to query
-    :param num_rows: number of random rows to select
-    :param column: name of the column to filter by (validated against table schema)
-    :param value: value to match in the specified column
-    :param center: name of the center to filter by (optional)
-    :param logger: optional logger instance for logging results
-    :return: pandas.DataFrame with the randomly selected records
+    Randomly sample rows matching a column/value condition.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection
+        Active SQLite connection.
+    db_table : str
+        Table to query.
+    num_rows : int
+        Number of random rows to select.
+    column : str
+        Column used for filtering.
+    value : object
+        Required value in `column`.
+    center : str | None, optional
+        Optional additional center filter.
+    logger : logging.Logger, optional
+        Currently unused placeholder for interface consistency.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Random sample of matching rows. The sample is built with SQL `OFFSET`
+        selection and may be smaller than `num_rows` when few matches exist.
     """
     cursor = conn.cursor()
 
@@ -183,28 +278,58 @@ def select_random_rows_by_column(conn, db_table, num_rows: int, column, value, c
 
 def select_random_rows_with_images(conn, db_table, num_rows: int, center=None):
     """
-    Select a random sample of rows from the specified database table where the 'downloaded' column is 'yes', indicating that image files have been downloaded, optionally filtered by center. Returns a pandas DataFrame with the results.
-    :param conn: active sqlite3 connection to database
-    :param db_table: name of the table to query
-    :param num_rows: number of random rows to select
-    :param center: name of the center to filter by (optional)
-    :return: pandas.DataFrame with the randomly selected records where images have been downloaded
+    Randomly sample rows whose image files were already downloaded.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection
+        Active SQLite connection.
+    db_table : str
+        Table to query.
+    num_rows : int
+        Number of random rows to select.
+    center : str | None, optional
+        Optional additional center filter.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Random sample of rows where `downloaded = 'yes'`.
     """
     return select_random_rows_by_column(conn, db_table, num_rows=num_rows, column='downloaded', value='yes', center=center)
 
 def select_next_download_batch(conn, db_table, limit, status_column="downloaded", status_value="yes", order_by="center", logger=None):
     """
-    Select the next batch of rows from the specified database table where the status_column does not equal the status_value, ordered by the specified column, and limited to the specified number of rows. Returns a pandas DataFrame with the results.
-    :param conn: active sqlite3 connection to database
-    :param db_table: name of the table to query
-    :param limit: maximum number of rows to return (must be a positive integer)
-    :param status_column: name of the column to check for the status value (default: "downloaded")
-    :param status_value: value to exclude in the status column (default: "yes")
-    :param order_by: name of the column to order the results by (default: "center")
-    :param logger: optional logger instance for logging results
-    :return: pandas.DataFrame with the selected records for the next download batch
-    :raises ValueError: If table name, column name validation fails, or limit is not a positive integer
-    :raises sqlite3.Error: If database query fails
+    Select the next batch of rows that still need work.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection
+        Active SQLite connection.
+    db_table : str
+        Table to query.
+    limit : int
+        Maximum number of rows to return.
+    status_column : str, optional
+        Column whose completed value should be excluded.
+    status_value : object, optional
+        Completed value to exclude from the batch.
+    order_by : str, optional
+        Column used to order the batch.
+    logger : logging.Logger, optional
+        Logger used for status and error reporting.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Rows matching the batch criteria.
+
+    Raises
+    ------
+    ValueError
+        Raised when identifiers fail validation or `limit` is invalid.
+    sqlite3.Error
+        Raised when the query fails.
     """
     
     # Validate table name
@@ -242,21 +367,42 @@ def select_next_download_batch(conn, db_table, limit, status_column="downloaded"
 
 def save_image_metadata(conn, db_table, status, type, width, height, omero_id, mouse_id, center, logger=None):
     """
-    Update the database table with metadata information about a downloaded image, including its download status, type, dimensions, and associated identifiers. 
-    This function executes an SQL UPDATE on the table to record the latest metadata for the given image.
-    :param conn: active sqlite3 connection to database
-    :param db_table: name of the table to update
-    :param status: download status of the image (e.g., 'yes' or 'no')
-    :param type: type of the image (e.g., 'brightfield', 'fluorescence')
-    :param width: width of the image in pixels
-    :param height: height of the image in pixels
-    :param omero_id: OMERO image ID associated with the image
-    :param mouse_id: mouse ID associated with the image
-    :param center: name of the center that provided the image
-    :param logger: optional logger instance for logging results
-    :return: int - number of rows affected by the update
-    :raises ValueError: If table name validation fails or required parameters are empty
-    :raises sqlite3.Error: If database update fails
+    Save basic download metadata for one image row.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection
+        Active SQLite connection.
+    db_table : str
+        Table to update.
+    status : str
+        Download status value, typically `'yes'` or `'no'`.
+    type : str
+        Image type stored in the `type` column.
+    width : int
+        Image width in pixels.
+    height : int
+        Image height in pixels.
+    omero_id : str | int
+        OMERO image identifier.
+    mouse_id : str
+        Mouse identifier.
+    center : str
+        Center name associated with the image.
+    logger : logging.Logger, optional
+        Logger used for status and error reporting.
+
+    Returns
+    -------
+    int
+        Number of rows affected by the update.
+
+    Raises
+    ------
+    ValueError
+        Raised when identifiers are invalid or required values are empty.
+    sqlite3.Error
+        Raised when the update fails.
     """
     # validate table name
     if not db_table.replace('_', '').isalnum():
@@ -294,15 +440,35 @@ def save_image_metadata(conn, db_table, status, type, width, height, omero_id, m
 
 def save_full_image_metadata(df: pd.DataFrame, conn, db_table: str, logger=None):
     """
-    Save full image metadata from a pandas DataFrame to the specified SQLite database table. 
-    This function checks for missing columns in the table and adds them if necessary, then updates the table with the data from the DataFrame using the 'omero_id' as the unique identifier for each record.
-    :param df: pandas DataFrame containing the image metadata to save (must include 'omero_id' column)
-    :param conn: active sqlite3 connection to database
-    :param db_table: name of the SQLite table to update
-    :param logger: optional logger instance for logging results
-    :return: int - total number of rows affected by the update
-    :raises ValueError: If table name validation fails, DataFrame is empty, or 'omero_id' column is missing from DataFrame
-    :raises sqlite3.Error: If database update fails
+    Save a dataframe of image metadata into an existing table.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        Metadata rows to persist. The dataframe must contain the key column
+        expected by `update_rows_from_dataframe`.
+    conn : sqlite3.Connection
+        Active SQLite connection.
+    db_table : str
+        Table to update.
+    logger : logging.Logger, optional
+        Logger used for schema and update reporting.
+
+    Returns
+    -------
+    int
+        Total number of rows affected by the update phase.
+
+    Raises
+    ------
+    ValueError
+        Raised when the dataframe is empty or `db_table` is invalid.
+    sqlite3.Error
+        Raised when schema changes or updates fail.
+
+    Notes
+    -----
+    Missing columns are added to the table before row updates are executed.
     """
     # validate inputs
     if df.empty:
@@ -347,16 +513,32 @@ def save_full_image_metadata(df: pd.DataFrame, conn, db_table: str, logger=None)
 
 def update_rows_from_dataframe(conn, df, db_table='impc_data', key_column='omero_id', logger=None):
     """
-    Update rows in the specified database table using data from a pandas DataFrame. 
-    The function uses the specified key column to match records in the database and updates all other columns with the corresponding values from the DataFrame.
-    :param conn: active sqlite3 connection to database
-    :param df: pandas DataFrame containing the data to update (must include key_column)
-    :param db_table: name of the database table to update (default: 'impc_data')
-    :param key_column: name of the column to use as the unique identifier for matching records (default: 'omero_id')
-    :param logger: optional logger instance for logging results
-    :return: int - total number of rows affected by the update
-    :raises ValueError: If table name validation fails, DataFrame is empty, key_column is invalid, or key_column is missing from DataFrame
-    :raises sqlite3.Error: If database update fails
+    Update table rows from a dataframe keyed by one column.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection
+        Active SQLite connection.
+    df : pandas.DataFrame
+        Dataframe containing the update values. It must include `key_column`.
+    db_table : str, optional
+        Table to update.
+    key_column : str, optional
+        Column used to match database rows.
+    logger : logging.Logger, optional
+        Logger used for update reporting.
+
+    Returns
+    -------
+    int
+        Total number of rows affected by the batch update.
+
+    Raises
+    ------
+    ValueError
+        Raised when validation fails or there are no non-key columns to update.
+    sqlite3.Error
+        Raised when the update fails.
     """
     # validate inputs
     if df.empty:
@@ -412,17 +594,27 @@ def update_rows_from_dataframe(conn, df, db_table='impc_data', key_column='omero
 
 def update_column_values(conn, db_table, column, value, condition_column, condition_value):
     """
-    Update a specific column in the database table based on a condition. 
-    This function executes an SQL UPDATE on the table to set the specified column to the given value where the condition is met.
-    :param conn: active sqlite3 connection to database
-    :param db_table: name of the table to update
-    :param column: name of the column to update
-    :param value: new value to set in the specified column
-    :param condition_column: name of the column to use in the WHERE clause for the condition
-    :param condition_value: value to match in the condition column for the update to be applied
-    :return: int - number of rows affected by the update
-    :raises ValueError: If table name validation fails or column names are invalid
-    :raises sqlite3.Error: If database update fails
+    Update one column for rows matching a simple equality condition.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection
+        Active SQLite connection.
+    db_table : str
+        Table to update.
+    column : str
+        Column to modify.
+    value : object
+        New value to assign.
+    condition_column : str
+        Column used in the `WHERE` clause.
+    condition_value : object
+        Required value in `condition_column`.
+
+    Returns
+    -------
+    int
+        Number of rows affected by the update.
     """
     update = f"""
              UPDATE {db_table}
@@ -440,17 +632,36 @@ def update_column_values(conn, db_table, column, value, condition_column, condit
 def update_preprocess_status(conn, db_table, status, omero_id, preproc_methods, img_height, img_width,
                              logger=None):
     """
-    Update the database table with information about an image preprocessing status. 
-    This function executes an SQL UPDATE on the table to record the latest preprocessing status for the given image, as well as the methods used and the dimensions
-    of the preprocessed image.
-    :param conn: active sqlite3 connection to database
-    :param db_table: name of the table to update
-    :param status: status of the image preprocessing (e.g., 'yes' or 'no')
-    :param omero_id: OMERO image ID associated with the image
-    :param preproc_methods: list of preprocessing methods applied to the image (e.g., ['denoise', 'normalize'])
-    :param img_height: height of the preprocessed image in pixels
-    :param img_width: width of the preprocessed image in pixels
-    :param logger: optional logger instance for logging results"""
+    Record preprocessing status, dimensions, and method flags for one image.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection
+        Active SQLite connection.
+    db_table : str
+        Table to update.
+    status : str
+        Preprocessing status, typically `'yes'` or `'no'`.
+    omero_id : str | int
+        OMERO image identifier.
+    preproc_methods : sequence[str]
+        Method names that should be mirrored into `preproc_*` flag columns.
+    img_height : int
+        Height of the preprocessed image in pixels.
+    img_width : int
+        Width of the preprocessed image in pixels.
+    logger : logging.Logger, optional
+        Logger used for schema changes.
+
+    Returns
+    -------
+    None
+        The function updates the table in place and commits the changes.
+
+    Notes
+    -----
+    Missing status, dimension, and per-method columns are added automatically.
+    """
     add_column_to_table(conn, db_table, 'preprocessed', "TEXT", logger=logger)
     update = f"""
              UPDATE {db_table}
@@ -489,15 +700,33 @@ def update_preprocess_status(conn, db_table, status, omero_id, preproc_methods, 
 
 def update_rotate_status(conn, db_table, status, omero_id, img_height, img_width, logger=None):
     """
-    Update the database table with information about an image rotation status. 
-    This function executes an SQL UPDATE on the table to record the latest rotation status for the given image.
-    :param conn: active sqlite3 connection to database
-    :param db_table: name of the table to update
-    :param status: status of the image rotation
-    :param omero_id: OMERO image ID associated with the image
-    :param img_height: height of the rotated image in pixels
-    :param img_width: width of the rotated image in pixels
-    :param logger: optional logger instance for logging results
+    Record rotation status and output dimensions for one image.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection
+        Active SQLite connection.
+    db_table : str
+        Table to update.
+    status : str
+        Rotation status value.
+    omero_id : str | int
+        OMERO image identifier.
+    img_height : int
+        Height of the rotated image in pixels.
+    img_width : int
+        Width of the rotated image in pixels.
+    logger : logging.Logger, optional
+        Logger used for schema changes.
+
+    Returns
+    -------
+    None
+        The function updates the table in place and commits the changes.
+
+    Notes
+    -----
+    Missing rotation status and dimension columns are added automatically.
     """
     colname = 'rotated'
     add_column_to_table(conn, db_table, colname, "TEXT", logger=logger)
@@ -525,12 +754,27 @@ def update_rotate_status(conn, db_table, status, omero_id, img_height, img_width
 
 def add_column_to_table(conn, db_table, column_name, column_type, default_value=None, logger=None):
     """
-    Add a new column to an existing SQLite table if it does not already exist.
-    :param conn: active sqlite3 connection to database
-    :param table_name: name of the table to modify
-    :param column_name: name of the new column to add
-    :param column_type: data type of the new column (e.g., 'TEXT', 'INTEGER', 'REAL')
-    :param default_value: optional default value for the new column
+    Add a column to a table if it is not already present.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection
+        Active SQLite connection.
+    db_table : str
+        Table to modify.
+    column_name : str
+        Name of the column to add.
+    column_type : str
+        SQLite column type such as `TEXT`, `INTEGER`, or `REAL`.
+    default_value : object, optional
+        Optional SQL default expression used when creating the column.
+    logger : logging.Logger, optional
+        Logger used for schema-change reporting.
+
+    Returns
+    -------
+    None
+        The function updates the schema in place and commits the change.
     """    
     cursor = conn.cursor()
 
@@ -549,12 +793,23 @@ def add_column_to_table(conn, db_table, column_name, column_type, default_value=
 
 def get_value_by_id(column, omero_id, conn, db_table):
     """
-    Retrieve the value of a specific column from the database table for a given OMERO ID.
-    :param column: name of the column to retrieve
-    :param omero_id: OMERO image ID to look up
-    :param conn: active sqlite3 connection to database
-    :param db_table: name of the table to query
-    :return: value of the specified column for the given OMERO ID, or None if not found
+    Retrieve one column value for a given OMERO ID.
+
+    Parameters
+    ----------
+    column : str
+        Column to retrieve.
+    omero_id : str | int
+        OMERO image identifier to look up.
+    conn : sqlite3.Connection
+        Active SQLite connection.
+    db_table : str
+        Table to query.
+
+    Returns
+    -------
+    object | None
+        Column value for the matching OMERO ID, or `None` when no row matches.
     """
     query = f"""
             SELECT {column} 

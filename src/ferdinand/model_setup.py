@@ -7,8 +7,11 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.regularizers import l2
 
 """
-This module defines the CNN architecture for predicting angles from X-ray images. 
-The model is designed to handle the specific characteristics of the dataset, including the input image size and the number of output classes (angles). 
+Model-building utilities for X-ray angle prediction.
+
+The module defines a convolutional neural network for angle classification and
+metric helpers that compare predicted and true angles while respecting
+wrap-around on a 360-degree circle.
 """
 
 def create_model( 
@@ -18,12 +21,24 @@ def create_model(
         l2_reg=1e-4
 ):
     """
-    Create a CNN model for angle prediction from X-ray images.
-    :param input_shape: Shape of the input images (height, width, channels)
-    :param num_classes: Number of output classes (angles)
-    :param dropout_rate: Dropout rate for regularization
-    :param l2_reg: L2 regularization coefficient
-    :return: Compiled Keras model
+    Build the convolutional model used for angle classification.
+
+    Parameters
+    ----------
+    input_shape : tuple[int, int, int], optional
+        Shape of the input images as `(height, width, channels)`.
+    num_classes : int, optional
+        Number of output classes, typically one class per angle degree.
+    dropout_rate : float, optional
+        Dropout probability applied after pooling and dense blocks.
+    l2_reg : float, optional
+        L2 regularization coefficient for convolution and dense kernels.
+
+    Returns
+    -------
+    tensorflow.keras.models.Model
+        Uncompiled Keras model with a softmax output layer of size
+        `num_classes`.
     """
     inputs = Input(shape=input_shape)
 
@@ -95,13 +110,20 @@ def create_model(
 
 def angle_error(y_true, y_pred):
     """
-    Calculate the mean difference between the true angles
-    and the predicted angles. Each angle is represented
-    as a binary vector (one-hot encoded).
+    Compute mean angular error between one-hot labels and predictions.
 
-    :param y_true: True angles (one-hot encoded)
-    :param y_pred: Predicted angles (one-hot encoded)
-    :return: Mean angle error in degrees
+    Parameters
+    ----------
+    y_true : tensorflow.Tensor
+        Ground-truth labels encoded as one-hot angle classes.
+    y_pred : tensorflow.Tensor
+        Predicted class probabilities or logits with the same class layout as
+        `y_true`.
+
+    Returns
+    -------
+    tensorflow.Tensor
+        Scalar tensor containing the mean absolute angular error in degrees.
     """
     true_angles = tf.argmax(y_true, axis=-1)
     pred_angles = tf.argmax(y_pred, axis=-1)
@@ -111,10 +133,19 @@ def angle_error(y_true, y_pred):
 
 def angle_difference(x, y):
     """
-    Calculate minimum difference between two angles.
+    Compute the smallest circular difference between two angles.
 
-    :param x: First angle (in degrees)
-    :param y: Second angle (in degrees)
-    :return: Minimum difference between the two angles (in degrees)
+    Parameters
+    ----------
+    x : tensorflow.Tensor | array-like
+        First angle or tensor of angles in degrees.
+    y : tensorflow.Tensor | array-like
+        Second angle or tensor of angles in degrees.
+
+    Returns
+    -------
+    tensorflow.Tensor | array-like
+        Element-wise minimal angular difference in degrees on a 360-degree
+        circle.
     """
     return 180 - abs(abs(x - y) - 180)

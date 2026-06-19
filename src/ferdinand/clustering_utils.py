@@ -33,11 +33,27 @@ from matplotlib.colors import ListedColormap, BoundaryNorm
 from collections import Counter
 
 """
-This script provides image clustering utilities using deep learning and 
-graph-based community detection.
+Utilities for image embedding, clustering, and visualization.
+
+The module provides helpers to:
+- load image files into PyTorch datasets,
+- extract normalized transformer embeddings,
+- build a k-nearest-neighbor graph over those embeddings,
+- cluster the graph with Leiden community detection, and
+- visualize optimization and low-dimensional projections.
 """
 
 class FileListDataset(Dataset):
+    """
+    Dataset that lazily loads RGB images from a list of file paths.
+
+    Parameters
+    ----------
+    file_list : Sequence[str | os.PathLike]
+        Paths to images that should be opened on demand.
+    transform : callable, optional
+        Optional transform applied to each PIL image before returning it.
+    """
     def __init__(self, file_list, transform=None):
         self.file_list = file_list
         self.transform = transform
@@ -53,14 +69,40 @@ class FileListDataset(Dataset):
         return image, img_path
 
 def collate_fn(batch):
+    """
+    Collate `(image, path)` samples into parallel image and path lists.
+
+    Parameters
+    ----------
+    batch : Sequence[tuple]
+        Iterable of `(image, path)` pairs produced by `FileListDataset`.
+
+    Returns
+    -------
+    tuple[list, list]
+        A pair containing the images and the corresponding file paths.
+    """
     imgs, paths = zip(*batch)
     return list(imgs), list(paths)
 
 def extract_features(image_files, 
                      model_name = "microsoft/swin-tiny-patch4-window7-224"): # "openai/clip-vit-base-patch16"): 
     """
-    Extracts feature embeddings from images using a pre-trained transformer model (SWIN or CLIP), 
-    normalizes them, and returns the features and file paths.
+    Extract normalized feature embeddings for a list of images.
+
+    Parameters
+    ----------
+    image_files : Sequence[str | os.PathLike]
+        Image paths to embed.
+    model_name : str, optional
+        Hugging Face model identifier used for the processor and backbone.
+        The model is expected to expose a `pooler_output` tensor.
+
+    Returns
+    -------
+    tuple[list[str | os.PathLike], numpy.ndarray]
+        The processed paths in dataloader order and a 2D array of
+        L2-normalized embeddings with one row per image.
     """
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -90,8 +132,20 @@ def extract_features(image_files,
 
 def build_knn_graph(features, n_neighbors=5):
     """
-    Builds a k-nearest neighbor graph from the feature vectors and 
-    converts it to an iGraph structure.
+    Build an undirected k-nearest-neighbor graph from feature vectors.
+
+    Parameters
+    ----------
+    features : array-like of shape (n_samples, n_features)
+        Feature matrix used to compute nearest neighbors.
+    n_neighbors : int, optional
+        Number of neighbors to connect for each sample before the graph is
+        symmetrized.
+
+    Returns
+    -------
+    igraph.Graph
+        Undirected graph with one vertex per feature vector.
     """
     # build KNN graph
     A = kneighbors_graph(
@@ -113,7 +167,23 @@ def build_knn_graph(features, n_neighbors=5):
 
 def leiden_with_resolution(g, resolution, seed=42):
     """
-    Applies the Leiden clustering algorithm (community detection) with a specified resolution parameter.
+    Run Leiden community detection for a fixed resolution parameter.
+
+    Parameters
+    ----------
+    g : igraph.Graph
+        Graph to partition.
+    resolution : float
+        Resolution parameter passed to
+        `leidenalg.RBConfigurationVertexPartition`.
+    seed : int, optional
+        Random seed used by Leiden.
+
+    Returns
+    -------
+    tuple[float, int, leidenalg.VertexPartition]
+        Modularity score, number of discovered clusters, and the fitted
+        partition object.
     """
     partition = leidenalg.find_partition(
         g,
@@ -134,8 +204,28 @@ def find_best_resolution(
     seed=42
 ):
     """
-    Searches through a range of resolution parameters to find 
-    the one that maximizes modularity (cluster quality).
+    Search a fixed resolution grid for the highest-modularity partition.
+
+    Parameters
+    ----------
+    features : array-like of shape (n_samples, n_features)
+        Feature matrix to cluster.
+    resolutions : iterable of float, optional
+        Resolution values to evaluate.
+    n_neighbors : int, optional
+        Neighborhood size used to build the graph once before the sweep.
+    repeats : int, optional
+        Number of Leiden runs per resolution. Additional runs increment the
+        provided seed by `rep`.
+    seed : int, optional
+        Base random seed for Leiden.
+
+    Returns
+    -------
+    dict
+        Dictionary containing the best resolution, its modularity, the best
+        partition, and a list of `(resolution, mean_modularity, n_clusters)`
+        tuples for every evaluation.
     """
     g = build_knn_graph(features, n_neighbors=n_neighbors)
 
@@ -179,33 +269,41 @@ def find_best_parameters_bayesian(
     verbose=True
 ):
     """
-    Bayesian Optimization for n_neighbors and resolution
-    
-    Parameters:
-    -----------
-    features : array-like
-        Feature matrix
-    n_neighbors_range : tuple
-        Min/Max for n_neighbors
-    resolution_range : tuple
-        Min/Max for resolution
-    n_calls : int
-        Total number of evaluations
-    n_random_starts : int
-        Number of random starts before Bayesian optimization
-    repeats : int
-        Repetitions per parameter combination (for stability)
-    seed : int
-        Random seed for reproducibility
-    verbose : bool
-        Print progress information
+    Optimize `n_neighbors` and Leiden `resolution` with Bayesian search.
+
+    Parameters
+    ----------
+    features : array-like of shape (n_samples, n_features)
+        Feature matrix to cluster.
+    n_neighbors_range : tuple[int, int], optional
+        Inclusive search bounds for `n_neighbors`.
+    resolution_range : tuple[float, float], optional
+        Inclusive search bounds for the Leiden resolution parameter.
+    n_calls : int, optional
+        Total number of objective evaluations.
+    n_random_starts : int, optional
+        Number of random evaluations performed before model-guided search.
+    repeats : int, optional
+        Number of repeated clustering runs per parameter configuration.
+    seed : int, optional
+        Random seed for the optimizer and Leiden runs.
+    verbose : bool, optional
+        Whether to print progress and per-evaluation metrics.
+
+    Returns
+    -------
+    dict
+        Dictionary containing the best parameters, best partition, the raw
+        `skopt` optimization result, and an evaluation history.
     """
     
     # history for all evaluations
     history = []
     
     def objective(params):
-        """Objective function: Will be minimized by Bayesian Optimization"""
+        """
+        Objective function: Will be minimized by Bayesian Optimization
+        """
         n_neighbors = int(params[0])
         resolution = params[1]
         
@@ -290,8 +388,14 @@ def find_best_parameters_bayesian(
 
 def plot_optimization_results(result, output_dir=None):
     """
-    Creates visualizations of the optimization process, including convergence plots, 
-    parameter space exploration, and cluster counts.
+    Visualize Bayesian search progress and save plots if requested.
+
+    Parameters
+    ----------
+    result : dict
+        Output produced by `find_best_parameters_bayesian`.
+    output_dir : str | os.PathLike, optional
+        Directory where PNG versions of the plots should be written.
     """
     fig, axes = plt.subplots(2, 2, figsize=(15, 12))
     
@@ -358,7 +462,25 @@ def plot_optimization_results(result, output_dir=None):
 
 def analyze_sensitivity(features, result, n_samples=20, seed=42, output_dir=None):
     """
-    Tests how robust the clustering is to small variations in the optimal parameters.
+    Measure how modularity changes around the best Bayesian parameters.
+
+    Parameters
+    ----------
+    features : array-like of shape (n_samples, n_features)
+        Feature matrix to cluster.
+    result : dict
+        Output produced by `find_best_parameters_bayesian`.
+    n_samples : int, optional
+        Number of samples to evaluate for each one-dimensional sweep.
+    seed : int, optional
+        Random seed used for Leiden runs.
+    output_dir : str | os.PathLike, optional
+        Directory where the sensitivity plot should be written.
+
+    Returns
+    -------
+    list[dict]
+        Evaluation records for both `n_neighbors` and `resolution` sweeps.
     """
     best_n = result['best_n_neighbors']
     best_r = result['best_resolution']
@@ -425,7 +547,18 @@ def analyze_sensitivity(features, result, n_samples=20, seed=42, output_dir=None
     return results
 
 def compute_and_plot_pca(labels, features, output_dir=None):
-    
+    """
+    Project features with PCA and visualize them colored by cluster label.
+
+    Parameters
+    ----------
+    labels : array-like of shape (n_samples,)
+        Cluster label for each feature vector.
+    features : array-like of shape (n_samples, n_features)
+        Feature matrix to project into two dimensions.
+    output_dir : str | os.PathLike, optional
+        Directory where `leiden_clustering_pca.png` should be saved.
+    """
     pca = PCA(n_components=2)
     reduced = pca.fit_transform(features)
 
@@ -434,13 +567,29 @@ def compute_and_plot_pca(labels, features, output_dir=None):
     plt.title(f"Leiden Clustering (PCA, JPEG Features)")
 
     if output_dir:
-        filename = os.path.join(clu_analysis_dir, str(center).replace(" ", "_").replace("/", "_"), "leiden_clustering_PCA.png")
+        filename = os.path.join(output_dir, "leiden_clustering_pca.png")
         plt.savefig(filename, dpi=300, bbox_inches="tight")
     
     plt.show()
     plt.close()
 
 def plot_embedding(labels, features, method="umap", annotate_clusters=False, output_file=None,):
+    """
+    Plot a 2D embedding of clustered features.
+
+    Parameters
+    ----------
+    labels : array-like of shape (n_samples,)
+        Cluster labels used for coloring points.
+    features : array-like of shape (n_samples, n_features)
+        Feature matrix to reduce into two dimensions.
+    method : {"umap", "pca"}, optional
+        Dimensionality-reduction method used before plotting.
+    annotate_clusters : bool, optional
+        If `True`, annotate representative points for a subset of clusters.
+    output_file : str | os.PathLike, optional
+        Path where the rendered plot should be written.
+    """
 
     labels = np.asarray(labels)
 

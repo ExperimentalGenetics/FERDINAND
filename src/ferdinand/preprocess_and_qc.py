@@ -14,18 +14,27 @@ import ferdinand.utils as utl
 import ferdinand.preprocess_and_qc as ppqc
 
 """
-This module contains functions for preprocessing and quality control of images downloaded from the IMPC. 
-Each center may have specific preprocessing steps based on the characteristics of the images they provide. 
+Preprocessing and quality-control helpers for IMPC image pipelines.
+
+The module defines center-specific preprocessing routines, batch helpers that
+write processed or rotated images to disk, and QC utilities that update SQLite
+metadata based on exposure and orientation analysis.
 """
 
 def preprocess_image_from_BCM(image):
     """
-    Preprocess the given image from BCM using a series of image enhancement techniques.
-    :param image: The image to be processed.
-    :return: tuple
-        - result_image (ndarray): The processed image after applying the transformations.
-        - methods_used (list of str): A list of method names that were applied to the image
-                                      during pre-processing, in the order they were applied.
+    Preprocess a BCM image with the BCM-specific enhancement sequence.
+
+    Parameters
+    ----------
+    image : numpy.ndarray
+        Input grayscale image.
+
+    Returns
+    -------
+    tuple[numpy.ndarray, list[str]]
+        Processed image and the ordered list of preprocessing method names that
+        were applied.
     """
     methods_used = []
 
@@ -50,12 +59,18 @@ def preprocess_image_from_BCM(image):
 
 def preprocess_image_from_HMGU(image):
     """
-    Preprocess the given image from center HMGU using a series of image enhancement techniques.
-    :param image: The image to be processed.
-    :return: tuple
-        - result_image (ndarray): The processed image after applying the transformations.
-        - methods_used (list of str): A list of method names that were applied to the image
-                                      during pre-processing, in the order they were applied.
+    Preprocess an HMGU image with the HMGU-specific enhancement sequence.
+
+    Parameters
+    ----------
+    image : numpy.ndarray
+        Input grayscale image.
+
+    Returns
+    -------
+    tuple[numpy.ndarray, list[str]]
+        Processed image and the ordered list of preprocessing method names that
+        were applied.
     """ 
     methods_used = []
     # kernel_setting_value = 1
@@ -73,12 +88,18 @@ def preprocess_image_from_HMGU(image):
 
 def preprocess_image_from_ICS(image):
     """
-    Preprocess the given image from center ICS using a series of image enhancement techniques.
-    :param image: The image to be processed.
-    :return: tuple
-        - result_image (ndarray): The processed image after applying the transformations.
-        - methods_used (list of str): A list of method names that were applied to the image
-                                      during pre-processing, in the order they were applied.
+    Preprocess an ICS image with the ICS-specific enhancement sequence.
+
+    Parameters
+    ----------
+    image : numpy.ndarray
+        Input grayscale image.
+
+    Returns
+    -------
+    tuple[numpy.ndarray, list[str]]
+        Processed image and the ordered list of preprocessing method names that
+        were applied.
     """
     methods_used = []
 
@@ -102,12 +123,18 @@ def preprocess_image_from_ICS(image):
 
 def _standard_preprocess_image_from_center(image):
     """
-    Apply a standard series of image enhancement techniques to preprocess the input image from centers where no specific preprocessing is defined.
-    :param image: The input image to be processed.
-    :return: tuple
-        - result_image (ndarray): The processed image after applying the transformations.
-        - methods_used (list of str): A list of method names that were applied to the image
-                                      during preprocessing, in the order they were applied.
+    Apply the default preprocessing pipeline used by several centers.
+
+    Parameters
+    ----------
+    image : numpy.ndarray
+        Input grayscale image.
+
+    Returns
+    -------
+    tuple[numpy.ndarray, list[str]]
+        Processed image and the ordered list of preprocessing method names that
+        were applied.
     """
     methods_used = []
 
@@ -124,31 +151,52 @@ def _standard_preprocess_image_from_center(image):
 
 def preprocess_image_from_JAX(image):
     """
-    Preprocess the input image from center JAX using a series of image enhancement techniques.
-    :param image: The input image to be processed.
-    :return: tuple
-        - result_image (ndarray): The processed image after applying the transformations.
-        - methods_used (list of str): A list of method names that were applied to the image during preprocessing, in the order they were applied.
+    Preprocess a JAX image with the default preprocessing pipeline.
+
+    Parameters
+    ----------
+    image : numpy.ndarray
+        Input grayscale image.
+
+    Returns
+    -------
+    tuple[numpy.ndarray, list[str]]
+        Processed image and the ordered list of preprocessing method names that
+        were applied.
     """
     return _standard_preprocess_image_from_center(image)
 
 def preprocess_image_from_KMPC(image):
     """
-    Preprocess the input image from center KMPC using a series of image enhancement techniques.
-    :param image: The input image to be processed.
-    :return: tuple
-        - result_image (ndarray): The processed image after applying the transformations.
-        - methods_used (list of str): A list of method names that were applied to the image during preprocessing, in the order they were applied.
+    Preprocess a KMPC image with the default preprocessing pipeline.
+
+    Parameters
+    ----------
+    image : numpy.ndarray
+        Input grayscale image.
+
+    Returns
+    -------
+    tuple[numpy.ndarray, list[str]]
+        Processed image and the ordered list of preprocessing method names that
+        were applied.
     """
     return _standard_preprocess_image_from_center(image)
 
 def preprocess_image_from_MRC_Harwell(image):
     """
-    Preprocess the input image from center MRC Harwell using a series of image enhancement techniques.
-    :param image: The input image to be processed.
-    :return: tuple
-        - result_image (ndarray): The processed image after applying the transformations.
-        - methods_used (list of str): A list of method names that were applied to the image during preprocessing, in the order they were applied.
+    Preprocess an MRC Harwell image with brightness-dependent marker removal.
+
+    Parameters
+    ----------
+    image : numpy.ndarray
+        Input grayscale image.
+
+    Returns
+    -------
+    tuple[numpy.ndarray, list[str]]
+        Processed image and the ordered list of preprocessing method names that
+        were applied.
     """
     methods_used = []
 
@@ -176,21 +224,35 @@ def preprocess_image_from_MRC_Harwell(image):
 
 def preprocess_image_from_RBRC(image):
     """
-    Preprocess the input image from center RBRC using a series of image enhancement techniques.
-    :param image: The input image to be processed.
-    :return: tuple
-        - result_image (ndarray): The processed image after applying the transformations.
-        - methods_used (list of str): A list of method names that were applied to the image during preprocessing, in the order they were applied.
+    Preprocess an RBRC image with the default preprocessing pipeline.
+
+    Parameters
+    ----------
+    image : numpy.ndarray
+        Input grayscale image.
+
+    Returns
+    -------
+    tuple[numpy.ndarray, list[str]]
+        Processed image and the ordered list of preprocessing method names that
+        were applied.
     """
     return _standard_preprocess_image_from_center(image)
 
 def preprocess_image_from_TCP(image):
     """
-    Preprocess the input image from center TCP using a series of image enhancement techniques.
-    :param image: The input image to be processed.
-    :return: tuple
-        - result_image (ndarray): The processed image after applying the transformations.
-        - methods_used (list of str): A list of method names that were applied to the image during preprocessing, in the order they were applied.
+    Preprocess a TCP image with brightness-dependent right-edge cropping.
+
+    Parameters
+    ----------
+    image : numpy.ndarray
+        Input grayscale image.
+
+    Returns
+    -------
+    tuple[numpy.ndarray, list[str]]
+        Processed image and the ordered list of preprocessing method names that
+        were applied.
     """    
     methods_used = []
 
@@ -215,11 +277,18 @@ def preprocess_image_from_TCP(image):
 
 def preprocess_image_from_UC_Davis(image):
     """
-    Preprocess the input image from center UC Davis using a series of image enhancement techniques.
-    :param image: The input image to be processed.
-    :return: tuple
-        - result_image (ndarray): The processed image after applying the transformations.
-        - methods_used (list of str): A list of method names that were applied to the image during preprocessing, in the order they were applied.
+    Preprocess a UC Davis image with brightness compensation when needed.
+
+    Parameters
+    ----------
+    image : numpy.ndarray
+        Input grayscale image.
+
+    Returns
+    -------
+    tuple[numpy.ndarray, list[str]]
+        Processed image and the ordered list of preprocessing method names that
+        were applied.
     """
     methods_used = []
 
@@ -246,11 +315,18 @@ def preprocess_image_from_UC_Davis(image):
 
 def preprocess_image_from_WTSI(image):
     """
-    Preprocess the input image from center WTSI using a series of image enhancement techniques.
-    :param image: The input image to be processed.
-    :return: tuple
-        - result_image (ndarray): The processed image after applying the transformations.
-        - methods_used (list of str): A list of method names that were applied to the image during preprocessing, in the order they were applied.
+    Preprocess a WTSI image with the default preprocessing pipeline.
+
+    Parameters
+    ----------
+    image : numpy.ndarray
+        Input grayscale image.
+
+    Returns
+    -------
+    tuple[numpy.ndarray, list[str]]
+        Processed image and the ordered list of preprocessing method names that
+        were applied.
     """
     return _standard_preprocess_image_from_center(image)
 
@@ -271,15 +347,44 @@ FUNC_MAP = {
 def preprocess_image(conn, db_table, center, image_file_path, source_path, target_path, 
                      pad_to_square=True, logger=None):
     """
-    Preprocess the given image file based on the specified center's preprocessing function.  
-    :param conn: Active sqlite connection object.
-    :param center: Name of centre where the image has been generated.
-    :param image_file_path: Full path to the image file to be processed.
-    :param source_path: Path to locally saved images.
-    :param target_path: Path to where the processed images are locally stored.
-    :param pad_to_square: Boolean indicating whether to pad the images to a square shape before saving (default: True).
-    :param logger: Logger object for logging messages (default: None).
-    :return: tuple (preproc_file_path, preproc_image, methods_used)
+    Preprocess one image, save it, and optionally update the SQLite metadata.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection | None
+        Open SQLite connection used to record preprocessing status.
+    db_table : str
+        Database table updated when `conn` is provided.
+    center : str
+        Center name used to select the preprocessing function from `FUNC_MAP`.
+    image_file_path : str | os.PathLike
+        Full path to the source image file.
+    source_path : str | os.PathLike
+        Root directory segment that should be replaced when constructing the
+        output path.
+    target_path : str | os.PathLike
+        Root directory where the preprocessed image should be written.
+    pad_to_square : bool, optional
+        Whether to center the processed image onto a square canvas before the
+        final save.
+    logger : logging.Logger, optional
+        Logger used for debug output.
+
+    Returns
+    -------
+    tuple[str, numpy.ndarray, list[str]]
+        Output file path, final preprocessed image, and the ordered list of
+        preprocessing method names that were applied.
+
+    Raises
+    ------
+    ValueError
+        Raised when the center is unsupported, path rewriting is invalid, or
+        preprocessing returns no image data.
+    FileNotFoundError
+        Raised when the input image cannot be read.
+    IOError
+        Raised when the processed image cannot be written to disk.
     """
 
     preproc_func = FUNC_MAP.get(center)
@@ -345,15 +450,34 @@ def preprocess_image(conn, db_table, center, image_file_path, source_path, targe
 def preprocess_images(conn, db_table, center, image_files, source_path, target_path,
                       pad_to_square=True, logger=None, no_of_images_to_show=5):
     """
-    Processes and prepares a list of images for a specific center, applies necessary transformations, and stores them in the archive.
-    :param conn: Active sqlite connection object.
-    :param center: Name of centre where the images have been generated.
-    :param image_files: List of image file paths to be processed.
-    :param source_path: Path to locally saved images.
-    :param target_path: Path to where the processed images are locally stored.
-    :param pad_to_square: Boolean indicating whether to pad the images to a square shape before saving (default: True).
-    :param logger: Logger object for logging messages (default: None).
-    :return: List of file paths to the pre-processed images.
+    Preprocess a batch of images for one center.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection | None
+        Open SQLite connection used to record preprocessing status.
+    db_table : str
+        Database table updated when `conn` is provided.
+    center : str
+        Center name used to select the preprocessing pipeline.
+    image_files : sequence[str | os.PathLike]
+        Source image files to preprocess.
+    source_path : str | os.PathLike
+        Root directory segment that should be replaced when constructing output
+        paths.
+    target_path : str | os.PathLike
+        Root directory where preprocessed images should be written.
+    pad_to_square : bool, optional
+        Whether to center processed images on a square canvas.
+    logger : logging.Logger, optional
+        Logger used for per-image error messages.
+    no_of_images_to_show : int, optional
+        Number of processed images to preview with `plot_image_grid`.
+
+    Returns
+    -------
+    list[str]
+        File paths to successfully preprocessed images.
     """
     preproc_img_files = []
     pbar = tqdm(image_files, desc="Preprocessing images")
@@ -382,12 +506,27 @@ def preprocess_images(conn, db_table, center, image_files, source_path, target_p
 
 def flag_overexposed_images(conn, db_table, rows: pd.DataFrame, source_path, logger=None): 
     """
-    Flags images as overexposed based on brightness analysis and updates the database accordingly.
-    :param conn: Active sqlite connection object.
-    :param db_table: Name of the database table to update.
-    :param rows: DataFrame containing rows for which overexposure is to be flagged.
-    :param source_path: Path to the local image directory.
-    :param logger: Logger object for logging messages (default: None).
+    Flag overexposed images in the database using brightness heuristics.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection
+        Open SQLite connection used for schema updates and flag writes.
+    db_table : str
+        Database table to update.
+    rows : pandas.DataFrame
+        Rows containing at least `center`, `cohort_type`, `gene_symbol`,
+        `sex`, and `omero_id`.
+    source_path : str | os.PathLike
+        Root directory used to build the local JPEG path for each image.
+    logger : logging.Logger, optional
+        Logger forwarded to SQLite helper functions.
+
+    Returns
+    -------
+    None
+        The function updates database columns in place and does not return a
+        value.
     """
     if not rows.empty:
 
@@ -423,15 +562,43 @@ def predict_orientation_angle(conn, db_table, model, image_file_path, db_column_
                               target_size=(224, 224),
                               preproc_func=None, image=None):
     """
-    Predicts the orientation angle of an image using a pre-trained model and updates the database with the predicted angle.
-    :param conn: Active sqlite connection object.
-    :param model: Loaded model used for angle prediction.
-    :param image_file_path: Full path to the image file to be processed.
-    :param db_column_name: Name of the database column to store the predicted angle.
-    :param db_table: Name of the database table to update.
-    :param preproc_func: Function for preprocessing the image before prediction (default: imgproc.binarize_images).
-    :param image: Optional pre-loaded image data. If not provided, the image will be read from the file path.
-    :return: Predicted angle of the image
+    Predict an image orientation angle and optionally store it in SQLite.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection | None
+        Open SQLite connection used to retrieve metadata and optionally store
+        the prediction.
+    db_table : str
+        Database table queried and updated when `conn` is provided.
+    model : object
+        Loaded model exposing a `predict(...)` method compatible with the image
+        batch produced here.
+    image_file_path : str | os.PathLike
+        Full path to the image file.
+    db_column_name : str | None
+        Database column that should receive the predicted angle. When `None`,
+        no prediction value is written back.
+    target_size : tuple[int, int], optional
+        Resize target passed to `imgutl.get_image_as_array`.
+    preproc_func : callable | None, optional
+        Optional preprocessing function applied to the resized batch before
+        inference.
+    image : numpy.ndarray | None, optional
+        Optional preloaded grayscale image used only for existence validation.
+
+    Returns
+    -------
+    int
+        Predicted orientation angle as the winning class index.
+
+    Raises
+    ------
+    FileNotFoundError
+        Raised when the source image cannot be read.
+    ValueError
+        Raised when the database does not contain exactly one row for the image
+        OMERO ID.
     """
     # load the image in grayscale
     if image is None:
@@ -484,10 +651,20 @@ def predict_orientation_angle(conn, db_table, model, image_file_path, db_column_
 
 def predict_rotation_angle(predicted_orientation_angle, logger=None):
     """
-    Predicts the rotation angle needed to correct the image orientation based on the predicted orientation angle.
-    :param predicted_orientation_angle: The predicted orientation angle of the image (in degrees).
-    :param logger: Logger object for logging messages (default: None).
-    :return: The angle difference (in degrees) needed to rotate the image to the correct orientation.
+    Convert a predicted orientation into the corrective rotation angle.
+
+    Parameters
+    ----------
+    predicted_orientation_angle : int | float
+        Predicted orientation angle in degrees.
+    logger : logging.Logger, optional
+        Logger used for debug output.
+
+    Returns
+    -------
+    int | float
+        Rotation angle in degrees that would bring the image back to the
+        canonical orientation.
     """
     predicted_rotation_angle = (-predicted_orientation_angle)%360
 
@@ -499,18 +676,39 @@ def predict_rotation_angle(predicted_orientation_angle, logger=None):
 
 def load_and_rotate_image(conn, db_table, image_file, source_path, target_path, logger=None):
     """
-    Loads an image, predicts its orientation angle using a pre-trained model, rotates the image accordingly, and saves the rotated image to the target path. 
-    The function also updates the database with the rotation status and new image dimensions.
-    :param conn: Active sqlite connection object.
-    :param db_table: Name of the database table to update.
-    :param image_file: Name of the image file to be processed.
-    :param source_path: Path to the source directory where the image is located.
-    :param target_path: Description
-    :param logger: Description
-    :return: tuple (rotated_file_path, rotated_image, rotation_angle)
-        - rotated_file_path (str): The file path where the rotated image is saved.
-        - rotated_image (ndarray): The rotated image after applying the rotation correction.
-        - rotation_angle (float): The angle difference (in degrees) used to rotate the image
+    Rotate one image using a previously stored orientation prediction.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection
+        Open SQLite connection used to read the stored orientation prediction
+        and update rotation status.
+    db_table : str
+        Database table queried and updated during rotation.
+    image_file : str | os.PathLike
+        Full path to the source image file.
+    source_path : str | os.PathLike
+        Root directory segment that should be replaced when constructing the
+        output path.
+    target_path : str | os.PathLike
+        Root directory where the rotated image should be written.
+    logger : logging.Logger, optional
+        Logger used for debug output.
+
+    Returns
+    -------
+    tuple[str, numpy.ndarray, int | float]
+        Output file path, rotated image, and corrective rotation angle.
+
+    Raises
+    ------
+    FileNotFoundError
+        Raised when the source image cannot be read.
+    ValueError
+        Raised when no stored orientation exists or output path rewriting is
+        invalid.
+    IOError
+        Raised when the rotated image cannot be written to disk.
     """
     
     omero_id = os.path.splitext(os.path.basename(image_file))[0]
@@ -580,13 +778,31 @@ def load_and_rotate_image(conn, db_table, image_file, source_path, target_path, 
 def load_and_rotate_images(conn, db_table, image_files, source_path, target_path, 
                            logger=None, no_of_images_to_show=5):
     """
-    Processes and rotates a list of images based on predicted rotation angles, and stores them in the archive.
-    :param conn: Active sqlite connection object.
-    :param image_files: List of image file paths to be processed.
-    :param source_path: Path to locally saved images.
-    :param target_path: Path to where the processed images are locally stored.
-    :param logger: Logger object for logging messages (default: None).
-    :return: List of file paths to the rotated images.
+    Rotate a batch of images using previously stored orientation predictions.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection
+        Open SQLite connection used to read predictions and update rotation
+        status.
+    db_table : str
+        Database table queried and updated during rotation.
+    image_files : sequence[str | os.PathLike]
+        Source image files to rotate.
+    source_path : str | os.PathLike
+        Root directory segment that should be replaced when constructing output
+        paths.
+    target_path : str | os.PathLike
+        Root directory where rotated images should be written.
+    logger : logging.Logger, optional
+        Logger used for per-image error messages.
+    no_of_images_to_show : int, optional
+        Number of rotated images to preview with `plot_image_grid`.
+
+    Returns
+    -------
+    list[str]
+        File paths to successfully rotated images.
     """
 
     rotated_img_files = []
