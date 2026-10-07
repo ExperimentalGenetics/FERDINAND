@@ -440,7 +440,7 @@ def compute_and_plot_pca(labels, features, output_dir=None):
     plt.show()
     plt.close()
 
-def plot_embedding(labels, features, method="umap", annotate_clusters=False, output_file=None,):
+def plot_embedding(center, labels, features, method="umap", annotate_clusters=False, output_file=None,):
 
     labels = np.asarray(labels)
 
@@ -452,13 +452,13 @@ def plot_embedding(labels, features, method="umap", annotate_clusters=False, out
         reduced = reducer.fit_transform(features)
         x_label = "UMAP-1"
         y_label = "UMAP-2"
-        title = "Leiden Clustering (UMAP)"
+        title = f"{center}: Leiden Clustering (UMAP, JPEG Features)"
     elif method.lower() == "pca":
         reducer = PCA(n_components=2)
         reduced = reducer.fit_transform(features)
         x_label = "PC1"
         y_label = "PC2"
-        title = "Leiden Clustering (PCA)"
+        title = f"{center}: Leiden Clustering (PCA, JPEG Features)"
     else:
         raise ValueError(
             f"Unknown method '{method}'. "

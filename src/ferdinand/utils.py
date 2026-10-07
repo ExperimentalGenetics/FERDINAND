@@ -340,7 +340,8 @@ def create_thumbnail_gallery(data: pd.DataFrame,
                              html_dir: str, 
                              thumbnails_dir: str,
                              source_dir: str, 
-                             alignment_details: bool = False):
+                             alignment_details: bool = False, 
+                             image_only: bool = False):
     """
     Creates an HTML gallery of thumbnail images organized by center, with optional alignment details.
     :param data: DataFrame containing metadata for the images, including columns 'center', 'cohort_type', 'gene_symbol', 'sex', 'omero_id', and optionally 'fst_angle_prediction' and 'snd_angle_prediction' for alignment details.
@@ -387,7 +388,11 @@ def create_thumbnail_gallery(data: pd.DataFrame,
                 orig_href = _href_from_html(orig_file)
                 thumb_href = _href_from_html(thumb_file)
                 # f.write(f'<a href="{orig_file}"><img src="{thumb_file}" width="128" ></a> ')
-                if alignment_details:
+                if image_only: 
+                    f.write(f'''
+                            <div style="display:inline-block; text-align:center;">
+                            <a href="{orig_href}"><img src="{thumb_href}" width="128"></a></div>''')
+                elif alignment_details:
                     f.write(f'''
                             <div style="display:inline-block; text-align:center;">
                             <a href="{orig_href}"><img src="{thumb_href}" width="128"></a><br>

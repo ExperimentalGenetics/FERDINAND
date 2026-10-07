@@ -1,15 +1,15 @@
-# FERDINAnD
+# FERDINAND
 
 An open framework for access and AI-ready preprocessing of IMPC 2D radiographs.
 
 ## Getting Started
 
-There are two supported ways to run FERDINAnD:
+There are two supported ways to run FERDINAND:
 
 1. Local installation (Python environment on your machine)
 2. Docker-based run (recommended)
 
-Recommended for new users: run FERDINAnD with Docker.
+Recommended for new users: run FERDINAND with Docker.
 
 1. Check prerequisites:
    - On macOS/Windows: Docker Desktop is running
@@ -54,7 +54,7 @@ Recommended for new users: run FERDINAnD with Docker.
 
 ## Purpose
 
-FERDINAnD is an end-to-end framework for building AI-ready datasets from IMPC 2D radiographs. It supports the full workflow from data acquisition to curation and quality control, and can be run either locally or via Docker.
+FERDINAND is an end-to-end framework for building AI-ready datasets from IMPC 2D radiographs. It supports the full workflow from data acquisition to curation and quality control, and can be run either locally or via Docker.
 
 Core capabilities:
 
@@ -143,8 +143,8 @@ It is recommended to install the project inside a __virtual environment__. To do
 1. __Clone the repository__, then change to its directory:
 
     ```bash
-    git clone https://github.com/ExperimentalGenetics/FERDINAnD.git
-    cd FERDINAnD
+    git clone https://github.com/ExperimentalGenetics/FERDINAND.git
+    cd FERDINAND
     ```
 
 2. __Create and activate a virtual environment__ (example with Python's built-in venv):
@@ -265,4 +265,4 @@ This project is licensed under the MIT License. See [LICENSE](LICENSE) for detai
 ## Authors
 
 Holger Maier, Ralph Steinkamp & Elida Schneltzer, Experimental Genetics, Helmholtz Munich
-and contributors. See [GitHub contributors](https://github.com/ExperimentalGenetics/FERDINAnD/graphs/contributors)
+and contributors. See [GitHub contributors](https://github.com/ExperimentalGenetics/FERDINAND/graphs/contributors)
