@@ -31,6 +31,10 @@ Core components:
 - `pip`
 - a virtual environment (`venv` or conda)
 
+### Download model
+
+- The angle detection model required for the rotation step in the pipeline is provided [here](https://nefeli.helmholtz-munich.de/records/5caqs-xew56?token=eyJhbGciOiJIUzUxMiJ9.eyJpZCI6ImU3OGU4MDA5LTMxNGUtNGNiZi1iYWZlLTQyNGE3MzUyOTQ1YiIsImRhdGEiOnt9LCJyYW5kb20iOiIzZmNjZmVjMTRlZjdhYmFhNzZkN2Q0ZjE3NDVlN2VmNSJ9.9zmFAYmC2A8uXOHGO66RvYmyyCE5zdOnzB9kgssrwM2I1dz5SOuplmnH2eYHvm9JqYGc2wIos7IFmKjYwzF29w).
+
 ## Clone Repository
 
 ```bash
