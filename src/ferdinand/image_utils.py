@@ -12,15 +12,39 @@ from PIL import Image
 from io import BytesIO
 
 """
-This module provides utility functions for processing and analyzing images, including DICOM and common image formats.
+Utilities for image metadata extraction and preprocessing.
+
+The module contains helpers for:
+- detecting downloaded image formats and extracting metadata from DICOM and
+  common raster files,
+- applying contrast, blur, inversion, cropping, padding, and rotation
+  transforms, and
+- computing simple brightness and exposure heuristics used in downstream image
+  quality checks.
+
+Most functions operate on NumPy arrays, while the metadata helpers work with
+PIL images, local files, or HTTP response content.
 """
 
 def detect_file_format(response):
     """
-    Detect image file format from an HTTP response by checking the Content-Type header and attempting to read the content with PIL and pydicom.
-    
-    :param response: requests.Response object from requests.get()
-    :return: Detected file format, e.g. "JPEG", "PNG", "DICOM", or "Unknown".
+    Detect an image file format from an HTTP response.
+
+    Parameters
+    ----------
+    response : requests.Response
+        Response whose headers and content should be inspected.
+
+    Returns
+    -------
+    str
+        Detected format name such as `"JPEG"`, `"PNG"`, `"BMP"`, `"DICOM"`,
+        or `"Unknown"` if no parser succeeds.
+
+    Notes
+    -----
+    Detection first consults the `Content-Type` header, then falls back to PIL
+    and finally to `pydicom`.
     """
     # 1. check HTTP Content-Type header
     content_type = response.headers.get("Content-Type", "").lower()
@@ -51,17 +75,27 @@ def detect_file_format(response):
 
 def get_png_pixel_spacing(image, logger=None):
     """
-    Extract metadata (size, spacing, DPI, manufacturer) from DICOM/PNG/JPEG.
+    Extract embedded pixel-spacing metadata from a PNG image.
 
-    :param image: A PIL Image object containing the image and its metadata.
-    :param logger: Optional logger for logging warnings and errors.
+    Parameters
+    ----------
+    image : PIL.Image.Image
+        PNG image whose `info` and `text` dictionaries may contain DICOM-style
+        metadata fields.
+    logger : logging.Logger, optional
+        Logger used for parse warnings and debug output.
 
-    :return: A tuple containing:
-        - spacing_key (str): The key used to extract pixel spacing (e.g., 'dcm:PixelSpacing' or 'dcm:ImagerPixelSpacing').
-        - pixel_spacing_x (float): The pixel spacing in the x-direction (column spacing).
-        - pixel_spacing_y (float): The pixel spacing in the y-direction (row spacing).
-        - manufacturer (str or None): The manufacturer of the imaging device, if available in the metadata.
-        - manufacturer_model_name (str or None): The model name of the imaging device, if available in the metadata.
+    Returns
+    -------
+    tuple[str | None, float | None, float | None, str | None, str | None]
+        The spacing key that matched, column spacing, row spacing,
+        manufacturer, and manufacturer model name. Spacing values are `None`
+        when the expected metadata keys are missing or malformed.
+
+    Raises
+    ------
+    TypeError
+        Raised when `image` is not a PIL image.
     """
     # validate input type
     if not isinstance(image, Image.Image):
@@ -116,17 +150,32 @@ def get_png_pixel_spacing(image, logger=None):
 
 def get_image_info(image_file, response, logger=None):
     """
-    Extract basic metadata from an image file (DICOM or JPEG/PNG).
-    DICOM images are read using pydicom.dcmread. Non-DICOM images are opened with PIL.Image.open.
-    Falls back to "Unknown" for missing DICOM attributes.
-    
-    :param image_file: path to the JPEG image file
-    :param response: HTTP response containing image data
-    :param logger: Optional logger for logging warnings and errors
-    :return: A tuple containing:
-        - width (int): Width of the image in pixels.
-        - height (int): Height of the image in pixels.
-        - color_scheme (str): Color mode of the image (e.g., 'RGB', 'L', etc.).
+    Extract image metadata from a local file or downloaded response body.
+
+    Parameters
+    ----------
+    image_file : str | os.PathLike
+        Path to a local image file. If the file exists, it is preferred over
+        the HTTP response content.
+    response : requests.Response | None
+        Optional HTTP response used when `image_file` does not yet exist on
+        disk.
+    logger : logging.Logger, optional
+        Logger used for error reporting when neither source is available.
+
+    Returns
+    -------
+    dict
+        Metadata dictionary containing fields such as `file`, `file_type`,
+        `width`, `height`, `color_scheme`, spacing information, and optional
+        manufacturer metadata. PNG files may additionally expose spacing values
+        embedded in textual metadata.
+
+    Notes
+    -----
+    DICOM images are read with `pydicom`, while non-DICOM files are opened with
+    PIL. When no local file exists and `response` is `None`, the function logs
+    the error and returns a dictionary with `None`-valued metadata fields.
     """
     info = {
         "file": image_file,
@@ -189,13 +238,27 @@ def get_image_info(image_file, response, logger=None):
 
 def apply_gaussian_blur(image, kernel_size=(5, 5), sigma=0):
     """
-    Applies a Gaussian blur to the input image to reduce noise and smoothen the image.
+    Apply Gaussian blur to reduce image noise.
 
-    :param image: The input image as a NumPy array (grayscale or color) on which to apply Gaussian blur.
-    :param kernel_size: The size of the Gaussian kernel (default: (5, 5)).
-    :param sigma: The standard deviation in the X and Y direction for the Gaussian kernel (default: 0, which means it is calculated from the kernel size).
+    Parameters
+    ----------
+    image : numpy.ndarray
+        Input grayscale or color image.
+    kernel_size : tuple[int, int], optional
+        Size of the Gaussian kernel.
+    sigma : float, optional
+        Standard deviation used by OpenCV. A value of `0` lets OpenCV infer it
+        from `kernel_size`.
 
-    :return: The resulting image after applying Gaussian blur as a NumPy array and the method name.
+    Returns
+    -------
+    tuple[numpy.ndarray, str]
+        Blurred image and the method label `"gaussian_blur"`.
+
+    Raises
+    ------
+    ValueError
+        Raised when `image` is `None`.
     """
     method_name="gaussian_blur"
     # validate the input image
@@ -208,14 +271,28 @@ def apply_gaussian_blur(image, kernel_size=(5, 5), sigma=0):
 
 def apply_edge_enhancement(image, scale=1.0, delta=0, ddepth=cv2.CV_64F):
     """
-    Enhances the edges of the input image using the Laplacian operator, emphasizing regions with sharp transitions.
+    Enhance edges with a Laplacian-based sharpening step.
 
-    :param image: The input image as a NumPy array (grayscale or color) to enhance edges.
-    :param scale: Scaling factor for the Laplacian gradient values (default: 1.0).
-    :param delta: Value added to the results after applying Laplacian (default: 0).
-    :param ddepth: Desired depth of the destination image (default: cv2.CV_64F for high precision).
+    Parameters
+    ----------
+    image : numpy.ndarray
+        Input grayscale or color image.
+    scale : float, optional
+        Scaling factor passed to `cv2.Laplacian`.
+    delta : float, optional
+        Value added to the Laplacian result.
+    ddepth : int, optional
+        OpenCV output depth used for the Laplacian computation.
 
-    :return: The resulting image with enhanced edges as a NumPy array and the method name.
+    Returns
+    -------
+    tuple[numpy.ndarray, str]
+        Edge-enhanced image and the method label `"edge_enhancement"`.
+
+    Raises
+    ------
+    ValueError
+        Raised when `image` is `None`.
     """
     method_name = "edge_enhancement"
     # validate the input image
@@ -232,15 +309,25 @@ def apply_edge_enhancement(image, scale=1.0, delta=0, ddepth=cv2.CV_64F):
 
 def crop_image_from_right(image, threshold_factor=20):
     """
-    Crops the image from the right based on brightness differences between columns. 
-    The function analyzes the average brightness of each column and identifies significant drops in brightness 
-    to determine where to crop the image from the right side. 
-    The threshold_factor parameter controls the sensitivity of the cropping, with higher values making it 
-    more likely to crop based on smaller brightness differences.
+    Crop an image from the right using column-brightness changes.
 
-    :param image: The input image as a NumPy array (grayscale or color) to be cropped.
-    :param threshold_factor: The factor that determines when a significant brightness difference triggers the crop.
-    :return: The cropped image as a NumPy array and the method name.
+    Parameters
+    ----------
+    image : numpy.ndarray
+        Input grayscale or color image.
+    threshold_factor : float, optional
+        Multiplier applied to the standard deviation of adjacent-column
+        brightness differences to determine the crop trigger.
+
+    Returns
+    -------
+    tuple[numpy.ndarray, str]
+        Cropped image and the method label `"crop_scale_right"`.
+
+    Raises
+    ------
+    ValueError
+        Raised when the input is missing or has fewer than two dimensions.
     """
     image = image.copy()
     method_name = "crop_scale_right"
@@ -271,12 +358,28 @@ def crop_image_from_right(image, threshold_factor=20):
 
 def crop_image_from_top(image, threshold_factor=1.2, fallback_percent=0.1):
     """
-    Crops the image from the top based on brightness differences between rows.
+    Crop an image from the top using row-brightness analysis.
 
-    :param image: The input image as a NumPy array (grayscale or color) to be cropped.
-    :param threshold_factor: The factor that determines when a significant brightness difference triggers the crop. Higher values make it more likely to crop based on smaller brightness differences.
-    :param fallback_percent: The percentage of the image height to use as a fallback area if no significant brightness difference is found.
-    :return: The cropped image as a NumPy array and the method name.
+    Parameters
+    ----------
+    image : numpy.ndarray
+        Input grayscale or color image.
+    threshold_factor : float, optional
+        Multiplier applied to the mean row brightness to find the first row
+        that marks the crop start.
+    fallback_percent : float, optional
+        Fraction of the image height to skip when no threshold crossing is
+        detected.
+
+    Returns
+    -------
+    tuple[numpy.ndarray, str]
+        Cropped image and the method label `"crop_scale_top"`.
+
+    Raises
+    ------
+    ValueError
+        Raised when the input is missing or has fewer than two dimensions.
     """
     method_name = "crop_scale_top"
     # validate the input image
@@ -303,14 +406,25 @@ def crop_image_from_top(image, threshold_factor=1.2, fallback_percent=0.1):
 
 def detect_image_inversion(image, brightness_threshold=128):
     """
-    Detects whether an image is likely inverted based on its mean brightness. 
-    In a normally exposed image, lower mean brightness corresponds to a darker image (background dark, foreground light), 
-    while an inverted image will have a higher mean brightness. 
-    The function uses a specified brightness threshold to determine if the image is likely inverted.
+    Heuristically detect whether a grayscale image looks inverted.
 
-    :param image: The input image as a NumPy array (grayscale or color) to be analyzed for inversion.
-    :param brightness_threshold: The threshold for determining inversion, where higher mean brightness suggests inversion. Default is 128.
-    :return: A boolean value indicating whether the image is likely inverted (True) or not (False).
+    Parameters
+    ----------
+    image : numpy.ndarray
+        Input grayscale image.
+    brightness_threshold : float, optional
+        Mean-brightness threshold above which the image is treated as likely
+        inverted.
+
+    Returns
+    -------
+    bool
+        `True` when the mean brightness exceeds `brightness_threshold`.
+
+    Raises
+    ------
+    ValueError
+        Raised when the input is missing or is not a 2D grayscale image.
     """
     # validate input
     if image is None:
@@ -328,11 +442,20 @@ def detect_image_inversion(image, brightness_threshold=128):
 
 def analyze_center_brightness(img_array, window_fraction=0.2):
     """
-    Analyzes the brightness of the central region of an image by calculating the average and median brightness within a defined window around the center.
+    Measure brightness statistics in the image center.
 
-    :param img_array: The input image as a NumPy array (grayscale or color).
-    :param window_fraction: Fraction of the image's width and height to consider as the center.
-    :return: Average and median brightness of the central region.
+    Parameters
+    ----------
+    img_array : numpy.ndarray
+        Input 2D grayscale image.
+    window_fraction : float, optional
+        Fraction of the image width and height used to define the centered
+        analysis window.
+
+    Returns
+    -------
+    tuple[float, float]
+        Mean and median brightness of the centered region.
     """
     # calculate the center window dimensions
     height, width = img_array.shape
@@ -356,11 +479,24 @@ def analyze_center_brightness(img_array, window_fraction=0.2):
 
 def remove_marker(image, threshold=55):
     """
-    Removes markers from the image by identifying and isolating the largest connected component based on a brightness threshold.
+    Remove bright markers by keeping only the largest connected component.
 
-    :param image: The input image as a NumPy array (grayscale) from which to remove markers.
-    :param threshold: The brightness threshold used to binarize the image and identify markers (default: 55).
-    :return: The cleaned image with markers removed as a NumPy array and the method name.
+    Parameters
+    ----------
+    image : numpy.ndarray
+        Input grayscale image.
+    threshold : int, optional
+        Threshold used to binarize the image before component analysis.
+
+    Returns
+    -------
+    tuple[numpy.ndarray, str]
+        Cleaned image and the method label `"remove_marker"`.
+
+    Raises
+    ------
+    ValueError
+        Raised when no foreground connected component is found.
     """
     method_name = "remove_marker"
 
@@ -387,10 +523,23 @@ def remove_marker(image, threshold=55):
 
 def invert_image(image):
     """
-    Inverts the pixel values of the input image, effectively creating a negative of the image.
+    Invert a grayscale or RGB image.
 
-    :param image: The input image as a NumPy array (grayscale or color) to be inverted.
-    :return: The inverted image as a NumPy array and the method name.
+    Parameters
+    ----------
+    image : numpy.ndarray
+        Input grayscale or RGB image.
+
+    Returns
+    -------
+    tuple[numpy.ndarray, str]
+        Inverted image and the method label `"inversion"`.
+
+    Raises
+    ------
+    ValueError
+        Raised when the input is missing, is not a NumPy array, or uses an
+        unsupported PIL mode after conversion.
     """
     method_name ="inversion"
     # validate the input image
@@ -414,12 +563,26 @@ def invert_image(image):
 
 def apply_clahe(image, clahe_clip_limit=2.0, tile_grid_size=(8, 8)):
     """
-    Applies Contrast Limited Adaptive Histogram Equalization (CLAHE) to enhance the contrast of the input image.
+    Apply CLAHE contrast enhancement to a grayscale image.
 
-    :param image: The input image as a NumPy array (grayscale) to which CLAHE will be applied.
-    :param clahe_clip_limit: The clip limit for CLAHE (default: 2.0). Higher values give more contrast.
-    :param tile_grid_size: The size of the grid for histogram equalization (default: (8, 8)).
-    :return: The resulting image after applying CLAHE for contrast enhancement and the method name.
+    Parameters
+    ----------
+    image : numpy.ndarray
+        Input grayscale image.
+    clahe_clip_limit : float, optional
+        Clip limit passed to OpenCV's CLAHE implementation.
+    tile_grid_size : tuple[int, int], optional
+        Tile size used for local histogram equalization.
+
+    Returns
+    -------
+    tuple[numpy.ndarray, str]
+        Contrast-enhanced image and the method label `"clahe"`.
+
+    Raises
+    ------
+    ValueError
+        Raised when the image is missing or is not single-channel.
     """
     method_name = "clahe"
     # validate the input image
@@ -439,11 +602,21 @@ def apply_clahe(image, clahe_clip_limit=2.0, tile_grid_size=(8, 8)):
 
 def pad_image_to_square(image, border_width=10):
     """
-    Pads the input image to make it square by adding borders of a specified width. 
-    The padding color is determined based on the average color of the image borders.
-    :param image: The input image as a NumPy array (grayscale or color) to be padded.
-    :param border_width: The width of the border area to consider for calculating the average color (default: 10 pixels).
-    :return: The padded image as a NumPy array.
+    Pad an image symmetrically until width and height match.
+
+    Parameters
+    ----------
+    image : numpy.ndarray
+        Input grayscale or color image.
+    border_width : int, optional
+        Width of the edge strip used to estimate the padding color.
+
+    Returns
+    -------
+    numpy.ndarray
+        Square image padded with an edge-color estimate. If the original aspect
+        ratio differs by an odd number of pixels, the extra pixel is added to
+        the right or bottom edge.
     """
 
     # if len(image.shape) == 2:
@@ -491,6 +664,34 @@ def center_mouse_on_square(
     center_mode="bbox",       # "bbox" | "centroid"
     output_mode="fixed_then_crop",  # "fixed_max" | "fit_centered" | "fixed_then_crop"
 ):
+    """
+    Translate the foreground object so it is centered on a square canvas.
+
+    Parameters
+    ----------
+    img : numpy.ndarray
+        Input grayscale or color image containing a single foreground object.
+    use_replicate : bool, optional
+        If `True`, extend the border with `cv2.BORDER_REPLICATE`. Otherwise use
+        a constant background estimated from border pixels.
+    center_mode : {"bbox", "centroid"}, optional
+        Strategy used to determine the object's center point.
+    output_mode : {"fixed_max", "fit_centered", "fixed_then_crop"}, optional
+        Controls the output canvas size:
+        - `fixed_max`: return a square with side length `max(height, width)`.
+        - `fit_centered`: grow the canvas until the translated object fits.
+        - `fixed_then_crop`: fit first, then crop back to `max(height, width)`.
+
+    Returns
+    -------
+    numpy.ndarray
+        Centered square image.
+
+    Raises
+    ------
+    ValueError
+        Raised when Otsu thresholding does not detect any foreground pixels.
+    """
     h, w = img.shape[:2]
     fixed_size = max(h, w)
 
@@ -567,11 +768,21 @@ def center_mouse_on_square(
 
 def get_image_as_array(image_file_path, target_size):
     """
-    Resizes the image to the specified target size, converts it to grayscale, and returns it as a NumPy array.
+    Load an image from disk, resize it, and return it as a batch array.
 
-    :param image_file_path: The file path to the input image.
-    :param target_size: A tuple specifying the desired output size (width, height) for the image.
-    :return: A NumPy array containing the processed image data.
+    Parameters
+    ----------
+    image_file_path : str | os.PathLike
+        Path to the input image.
+    target_size : tuple[int, int]
+        Target `(width, height)` passed to PIL resize.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of shape `(1, height, width, 1)` when the file exists, or an
+        empty array when the path is missing. The image is converted to
+        grayscale before conversion with `img_to_array`.
     """
     ret_val = []
     if os.path.exists(image_file_path):
@@ -585,12 +796,25 @@ def get_image_as_array(image_file_path, target_size):
 
 def apply_brightness(image, target_brightness=20):
     """
-    Adjusts the brightness of an image to match a target brightness level.
+    Shift image brightness toward a target mean value.
 
-    :param image: The input image as a NumPy array (grayscale or color).
-    :param target_brightness: The desired average brightness of the image. Default is 20.
-    :param logger: Optional logger for logging warnings and errors.
-    :return: The brightness-adjusted image as a NumPy array and the method name.
+    Parameters
+    ----------
+    image : numpy.ndarray
+        Input grayscale or color image.
+    target_brightness : float, optional
+        Desired mean brightness in the range `[0, 255]`.
+
+    Returns
+    -------
+    tuple[numpy.ndarray, str]
+        Brightness-adjusted image and the method label `"adjust_brightness"`.
+
+    Raises
+    ------
+    ValueError
+        Raised when the input is invalid or `target_brightness` is outside
+        `[0, 255]`.
     """
     method_name = "adjust_brightness"
     # validate the input image
@@ -616,13 +840,25 @@ def apply_brightness(image, target_brightness=20):
 
 def rotate_image(image, angle, border_width=None, background_color=None):
     """
-    Rotates an image by a specified angle while preserving the entire image content.
-    
-    :param image: The input image to be rotated (NumPy array).
-    :param angle: The rotation angle in degrees. Positive values rotate the image counter-clockwise.
-    :param border_width: Number of pixels to use from the borders to calculate the background color. If None, defaults to 10.
-    :param background_color: The color to fill the areas outside the original image. If None, it is calculated from the image borders.
-    :return: The rotated image with preserved content and filled background (NumPy array).
+    Rotate an image on a square output canvas.
+
+    Parameters
+    ----------
+    image : numpy.ndarray
+        Input image to rotate.
+    angle : float
+        Counter-clockwise rotation angle in degrees.
+    border_width : int | None, optional
+        Border width used when estimating the background color. Ignored when
+        `background_color` is provided.
+    background_color : int | sequence[int] | None, optional
+        Fill value used outside the original image. When omitted, the value is
+        estimated from the image borders.
+
+    Returns
+    -------
+    numpy.ndarray
+        Rotated image on a square canvas with side length `max(height, width)`.
     """
     if background_color is None:
         background_color = measure_image_border_color(image, border_width=border_width)
@@ -644,11 +880,25 @@ def rotate_image(image, angle, border_width=None, background_color=None):
 
 def measure_image_border_color(image, border_width=10):
     """
-    Measures the average color of the borders of an image to determine a suitable background color for padding or filling.
-    
-    :param image: The input image as a NumPy array (grayscale or color).
-    :param border_width: The width of the border area to consider for color measurement (default: 10 pixels).
-    :return: The average color of the borders as a NumPy array (for color images) or an integer (for grayscale images).
+    Estimate a representative border color from an image.
+
+    Parameters
+    ----------
+    image : numpy.ndarray
+        Input grayscale or color image.
+    border_width : int, optional
+        Width of the border strip sampled from all four edges.
+
+    Returns
+    -------
+    numpy.uint8 | int
+        Average border value. Grayscale inputs return an integer; color inputs
+        return a NumPy scalar/array compatible with OpenCV border fills.
+
+    Raises
+    ------
+    ValueError
+        Raised when the input dimensionality is not recognized.
     """
     h, w = image.shape[:2]
 
@@ -681,14 +931,27 @@ def measure_image_border_color(image, border_width=10):
 
 def analyze_mouse_brightness_median(image, bright_pixel_threshold=200, dark_pixel_threshold=20, median_threshold=180, bright_ratio_threshold=50):
     """
-    Analyzes the brightness of a grayscale mouse image based on the median and ratio of bright pixels.
+    Flag likely overexposure from grayscale brightness heuristics.
 
-    :param image: Input grayscale image of the mouse as a NumPy array.
-    :param bright_pixel_threshold: Threshold value for identifying bright pixels (default: 200).
-    :param dark_pixel_threshold: Threshold value for identifying dark pixels (default: 20).
-    :param median_threshold: Threshold value for the median brightness (default: 180).
-    :param bright_ratio_threshold: Threshold value for the ratio of bright pixels (default: 50).
-    :return: True if the image is considered too bright (overexposed), False otherwise.
+    Parameters
+    ----------
+    image : numpy.ndarray
+        Input grayscale image.
+    bright_pixel_threshold : float, optional
+        Threshold above which a pixel counts as bright.
+    dark_pixel_threshold : float, optional
+        Threshold below which pixels are treated as background and ignored.
+    median_threshold : float, optional
+        Median brightness threshold for overexposure detection.
+    bright_ratio_threshold : float, optional
+        Minimum percentage of bright pixels required to call the image too
+        bright.
+
+    Returns
+    -------
+    bool
+        `True` when both the median and bright-pixel-ratio heuristics indicate
+        overexposure.
     """
     too_bright = False
 
@@ -715,13 +978,23 @@ def analyze_mouse_brightness_median(image, bright_pixel_threshold=200, dark_pixe
 
 def detect_global_overexposure(image, bg_thresh=150, obj_thresh=160):
     """
-    The function defines background and object regions based on a border around the image. 
-    It calculates the mean brightness of both regions and determines if the image is globally overexposed based on the specified thresholds.
+    Detect global overexposure from border and interior brightness.
 
-    :param image: Input image as a NumPy array (grayscale or color).
-    :param bg_thresh: Threshold value for background brightness.
-    :param obj_thresh: Threshold value for object brightness.
-    :return: True if the image is globally overexposed, False otherwise.    
+    Parameters
+    ----------
+    image : numpy.ndarray
+        Input grayscale or color image. Color inputs are converted to grayscale
+        first.
+    bg_thresh : float, optional
+        Mean brightness threshold for the border region.
+    obj_thresh : float, optional
+        Mean brightness threshold for the interior object region.
+
+    Returns
+    -------
+    bool
+        `True` when both border and interior brightness exceed their
+        thresholds.
     """
     if image.ndim == 3:
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -755,12 +1028,27 @@ def detect_global_overexposure(image, bg_thresh=150, obj_thresh=160):
 
 def binarize_images(x, threshold=0.4, logger=None):
     """
-    Normalizes and binarizes an image or a batch of images.
-    
-    :param x: Input image or batch of images as a NumPy array with pixel values in the range [0, 255].
-    :param threshold: Threshold value for binarization (default: 0.4).
-    :param logger: Logger object for logging messages (default: None).
-    :return: Binarized image or batch of images as a NumPy array with pixel values of 0 or 1.
+    Normalize image data to `[0, 1]` and threshold it to a binary mask.
+
+    Parameters
+    ----------
+    x : numpy.ndarray
+        Input image or image batch with values in the range `[0, 255]`.
+    threshold : float, optional
+        Threshold applied after normalization to `[0, 1]`.
+    logger : logging.Logger, optional
+        Currently unused placeholder for callers that pass a logger interface.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array with the same shape as `x` containing only `0` and `1`.
+
+    Raises
+    ------
+    ValueError
+        Raised when `x` is not a NumPy array or contains values outside the
+        expected pixel range.
     """
 
     # ensure the input is a NumPy array

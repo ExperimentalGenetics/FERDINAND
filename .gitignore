@@ -9,10 +9,10 @@ config/configure.py
 config/config.yml
 logs
 data
-reports
+reports*
 .DS_Store
 data_local
-models
+models*
 docker/.env.compose
 notebooks/TEST_notebook.ipynb
 .env

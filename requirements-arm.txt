@@ -176,3 +176,4 @@ timm
 umap-learn
 ipynbname
 scikit-optimize
+colorcet

@@ -10,9 +10,16 @@ from pathlib import Path
 from ferdinand.image_utils import detect_file_format, get_image_info
 
 """
-The module for IMPC metadata and image downloading, including functions to fetch metadata for specified parameters and centers, 
-merge downloaded metadata files into combined dataframes, 
-and download images in either JPEG or original DICOM format while extracting relevant metadata.
+Utilities for downloading IMPC metadata tables and image assets.
+
+The module supports three main tasks:
+- downloading raw metadata CSV files from the IMPC API for selected centers
+  and parameters,
+- merging those raw files into center-level and global analysis tables, and
+- downloading OMERO-backed image files while extracting image metadata.
+
+Most helpers write files to disk as part of their normal workflow, so callers
+should provide directory paths that already exist and are writable.
 """
 
 IMPC_ORIGINAL_URL = 'https://www.ebi.ac.uk/mi/media/omero/webgateway/archived_files/download'
@@ -33,18 +40,44 @@ def fetch_metadata(mode: str, my_centers: list,
                    my_parameters: pd.DataFrame, expected_df: pd.DataFrame, dirs: SimpleNamespace, 
                    api_base_url: str, api_fields: str, api_options: str, logger):
     """
-    Downloads raw CSV metadata files for specified parameters and phenotyping centers from the IMPC API, using the provided API URL, fields, and options. 
-    The function dynamically sets the number of rows to download based on expected data points for each parameter and center, and saves the results to disk.    
+    Download raw IMPC metadata CSV files for selected parameters and centers.
 
-    :param mode: Description (e.g., "TEST" for limited download, "REAL" for full download)
-    :param my_centers: List of phenotyping centers to download data from
-    :param my_parameters: DataFrame containing parameters (stable_id) to download metadata for
-    :param expected_df: DataFrame containing expected number of data points for each parameter and center
-    :param dirs: SimpleNamespace containing directory paths for raw data storage
-    :param api_base_url: Base URL for the IMPC API
-    :param api_fields: Fields to include in the API request
-    :param api_options: Additional options for the API request
-    :param logger: Logger instance for logging results
+    Parameters
+    ----------
+    mode : str
+        Download mode. `"TEST"` limits each request to 20 rows; any other
+        value requests approximately the expected number of rows plus a small
+        buffer.
+    my_centers : list[str]
+        Phenotyping centers to request from the API.
+    my_parameters : pandas.DataFrame
+        Parameter table containing at least a `stable_id` column.
+    expected_df : pandas.DataFrame
+        Lookup table of expected row counts indexed by parameter stable ID and
+        with one column per center.
+    dirs : types.SimpleNamespace
+        Namespace containing `raw_data_dir`, where the downloaded CSV files
+        will be written.
+    api_base_url : str
+        Base IMPC API URL prefix before parameter and filter fragments are
+        appended.
+    api_fields : str
+        Query-string fragment listing requested API fields.
+    api_options : str
+        Additional query-string fragment appended to every request.
+    logger : logging.Logger
+        Logger used for progress and warning output.
+
+    Returns
+    -------
+    None
+        The function writes one raw CSV file per `(parameter, center)` pair and
+        logs progress, but does not return a value.
+
+    Raises
+    ------
+    requests.HTTPError
+        Raised when the IMPC API responds with a non-success status code.
     """
     # loop over all parameters and centers and download the metadata
     number_centers = len(my_centers)
@@ -110,15 +143,40 @@ def fetch_metadata(mode: str, my_centers: list,
 
 def merge_metadata_files(config: dict, dirs: SimpleNamespace, logger: logging.Logger) -> pd.DataFrame:
     """
-    Reads the raw CSV metadata files for all specified parameters and phenotyping centers, applies filters (e.g., duplicates, pipeline deviation, date of birth), 
-    merges them into combined DataFrames for each center, and then concatenates these into an overall IMPC DataFrame. 
-    The function also saves the combined data for each center and the overall data to disk.
-    
-    :param config: Configuration dictionary containing parameters, centers, and other settings
-    :param dirs: SimpleNamespace containing directory paths for raw data, center-specific data, and combined data storage
-    :param logger: Logger instance for logging messages and errors
+    Merge raw metadata CSV files into center-specific and global tables.
 
-    :return: Combined DataFrame of all metadata for all centers and parameters
+    Parameters
+    ----------
+    config : dict
+        Configuration dictionary containing at least:
+        - `centers`: list of center names,
+        - `parameters`: records with `stable_id`, `description`, `week`, and
+          `work_name`,
+        - `sqlite_db`: basename used for the all-centers CSV output.
+        Optional keys such as `max_pipeline_deviation`, `mouse_columns`, and
+        `additional_api_fields` further control filtering and column layout.
+    dirs : types.SimpleNamespace
+        Namespace containing `raw_data_dir`, `center_data_dir`, and
+        `all_data_dir`.
+    logger : logging.Logger
+        Logger used for processing, filtering, and merge progress.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Combined dataframe across all configured centers after filtering,
+        normalization, and per-center merges.
+
+    Notes
+    -----
+    This function has significant side effects. It writes one merged CSV per
+    center into `dirs.center_data_dir` and one all-centers CSV into
+    `dirs.all_data_dir`.
+
+    The raw input files are expected to include IMPC columns such as
+    `external_sample_id`, `omero_id`, `age_in_weeks`, `phenotyping_center`,
+    `date_of_birth`, and several pipeline/procedure metadata fields that are
+    later dropped or renamed.
     """
 
     # read config parameters
@@ -333,22 +391,58 @@ def merge_metadata_files(config: dict, dirs: SimpleNamespace, logger: logging.Lo
 
 def get_extension(file_type: str) -> str:
     """
-    Maps detected file type to corresponding file extension. Defaults to 'bin' if file type is unknown.
+    Map a detected image format name to a filename extension.
+
+    Parameters
+    ----------
+    file_type : str
+        File-type label such as `"JPEG"` or `"DICOM"`. Lookup is
+        case-insensitive.
+
+    Returns
+    -------
+    str
+        Preferred extension without a leading dot. Unknown formats fall back to
+        `"bin"`.
     """
     return IMAGE_FILE_EXTENSION_MAP.get(file_type.upper(), "bin")
 
 def download_image(omero_id, local_image_path, is_jpeg=True, save_local=True, logger=None):
     """
-    Downlaods an image from the IMPC server using the OMERO ID, either in JPEG or original DICOM format, and extracts relevant metadata. 
-    Optionally saves the image to local disk and logs the results. Returns a DataFrame containing the image metadata (dimensions, spacing, file extension, omero_id).
-    
-    :param omero_id: OMERO image identifier
-    :param local_image_path: Local directory path to save image file
-    :param is_jpeg: If True, download JPEG version; if False, download original DICOM (default: True)
-    :param save_local: If True, save image to disk; if False, only extract metadata (default: True)
-    :param logger: optional logger instance for logging results
-    :return: pandas.DataFrame with image metadata (dimensions, spacing, file extension, omero_id)
-    :raises RuntimeError: If HTTP request fails or server returns error status code
+    Download an IMPC image by OMERO ID and extract image metadata.
+
+    Parameters
+    ----------
+    omero_id : str | int
+        OMERO image identifier appended to the IMPC image endpoint.
+    local_image_path : str | os.PathLike
+        Directory where the downloaded image should be saved if `save_local` is
+        `True`.
+    is_jpeg : bool, optional
+        If `True`, request the rendered JPEG endpoint. If `False`, request the
+        original archived file endpoint.
+    save_local : bool, optional
+        Whether to write the downloaded bytes to `local_image_path`.
+    logger : logging.Logger, optional
+        Logger used for debug output.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Single-row dataframe describing the image. JPEG downloads return a
+        JPEG-specific schema with columns such as `jpeg_width` and
+        `jpeg_height`; non-JPEG downloads keep the original dimension/spacing
+        columns and add `file_extension`. Both variants include `omero_id`.
+
+    Raises
+    ------
+    RuntimeError
+        Raised when the image request returns a non-200 status code.
+
+    Notes
+    -----
+    The filename extension is inferred from the HTTP response rather than from
+    `is_jpeg` alone.
     """
     
     # construct URL based on image format (JPEG or original)

@@ -13,16 +13,30 @@ from tqdm import tqdm
 
 from ferdinand import sqlite_utils as sqlutl
 
+"""General utilities for image-path management, plotting, and galleries.
+
+The module provides helpers for configuring logging, building standardized
+directory layouts for IMPC images, selecting image file paths from SQLite-backed
+metadata, plotting image grids, and generating thumbnails or simple HTML
+galleries for inspection.
 """
-This module provides utility functions for handling image data, including logging setup, building standardized directory paths, selecting images from a database, plotting image grids, 
-creating thumbnails, and generating HTML galleries. These functions are designed to facilitate the management and visualization of image datasets in a consistent"""
 
 def setup_logger(log_file, log_level=logging.DEBUG):
     """
-    Set up a logger that writes to both a file and the console.
-    :param log_file: Path to the log file.
-    :param log_level: Logging level (default: DEBUG).
-    :return: configured logger."""
+    Configure a module logger that writes to a log file.
+
+    Parameters
+    ----------
+    log_file : str | os.PathLike
+        Destination path for the log file.
+    log_level : int, optional
+        Standard Python logging level.
+
+    Returns
+    -------
+    logging.Logger
+        Configured logger instance scoped to this module.
+    """
     # create a logger with the module's name
     logger = logging.getLogger(__name__)
     logger.setLevel(log_level)
@@ -48,13 +62,30 @@ def setup_logger(log_file, log_level=logging.DEBUG):
 
 def build_local_image_dir(dir_path, center, cohort_type, gene, mouse_sex):
     """
-    Builds a standardized directory path for storing images based on the provided parameters.
-    :param dir_path: Base directory path where images are stored.
-    :param center: Name of the center (e.g., "MPI-CBG").
-    :param cohort_type: Type of cohort (e.g., "mutant" or "control").
-    :param gene: Gene symbol (required if cohort_type is "mutant").
-    :param mouse_sex: Sex of the mouse (e.g., "male" or "female").
-    :return: Constructed directory path as a string.
+    Build the standardized directory path for a group of local images.
+
+    Parameters
+    ----------
+    dir_path : str | os.PathLike
+        Root directory where images are stored.
+    center : str
+        Center name, for example `"MPI-CBG"`.
+    cohort_type : str
+        Cohort type such as `"mutant"` or `"control"`.
+    gene : str | None
+        Gene symbol. Required when `cohort_type` is `"mutant"`.
+    mouse_sex : str
+        Mouse sex label.
+
+    Returns
+    -------
+    str
+        Constructed directory path.
+
+    Raises
+    ------
+    ValueError
+        Raised when required inputs are missing or cannot be normalized.
     """
     # validate inputs
     if not dir_path:
@@ -95,13 +126,25 @@ def build_local_image_dir(dir_path, center, cohort_type, gene, mouse_sex):
 
 def select_random_jpegs(conn, db_table, no_of_images, image_path, center=None):
     """
-    Selects a specified number of random images from the database and returns their file paths.
-    :param conn: Active sqlite connection.
-    :param db_table: Name of the database table to query.
-    :param no_of_images: Number of random images to select.
-    :param image_path: Base path to the images.
-    :param center: Center to filter images by (optional).
-    :return: List of file paths to the selected images.
+    Select random downloaded JPEG paths from the metadata database.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection
+        Active SQLite connection.
+    db_table : str
+        Metadata table to query.
+    no_of_images : int
+        Number of random images to select.
+    image_path : str | os.PathLike
+        Root directory containing the downloaded images.
+    center : str | None, optional
+        Optional center filter.
+
+    Returns
+    -------
+    list[str]
+        File paths to the selected JPEG images.
     """  
     df_random_rows = sqlutl.select_random_rows_with_images(conn, db_table, no_of_images, center)
     selected_images = []
@@ -117,12 +160,23 @@ def select_random_jpegs(conn, db_table, no_of_images, image_path, center=None):
 
 def select_jpegs(conn, db_table, image_path, center=None):
     """
-    Selects images from the database and returns their file paths.
-    :param conn: Active sqlite connection.
-    :param db_table: Name of the database table to query.
-    :param image_path: Base path to the images.
-    :param center: Center to filter images by (optional).
-    :return: List of file paths to the selected images.
+    Select all JPEG paths described by the metadata database.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection
+        Active SQLite connection.
+    db_table : str
+        Metadata table to query.
+    image_path : str | os.PathLike
+        Root directory containing the downloaded images.
+    center : str | None, optional
+        Optional center filter.
+
+    Returns
+    -------
+    list[str]
+        File paths to the selected JPEG images.
     """
     df_rows = sqlutl.select_rows(conn=conn, db_table=db_table, center=center)
     selected_images = []
@@ -138,24 +192,49 @@ def select_jpegs(conn, db_table, image_path, center=None):
 
 def select_jpegs_by_column(conn, db_table, column, value, source_path):
     """
-    Selects images from the database where a specific column matches a given value and returns their file paths.
-    :param conn: Active sqlite connection.
-    :param db_table: Name of the database table to query.
-    :param column: Column name to filter by.
-    :param value: Value to match in the specified column.
-    :param source_path: Base path to the images.
-    :return: List of file paths to the selected images.
+    Select JPEG paths for rows matching one metadata condition.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection
+        Active SQLite connection.
+    db_table : str
+        Metadata table to query.
+    column : str
+        Metadata column used as a filter key.
+    value : object
+        Required value in `column`.
+    source_path : str | os.PathLike
+        Root directory containing the downloaded images.
+
+    Returns
+    -------
+    list[str]
+        File paths to the selected JPEG images.
     """
     return select_jpegs_by_columns(conn, db_table, filters={column: value}, source_path=source_path)
 
 def select_jpegs_by_columns(conn, db_table, filters: dict, source_path): 
     """
-    Selects images from the database where specific columns match given values and returns their file paths.
-    :param conn: Active sqlite connection.
-    :param db_table: Name of the database table to query.
-    :param filters: Dictionary of column-value pairs to filter by.
-    :param source_path: Base path to the images.
-    :return: List of file paths to the selected images.
+    Select JPEG paths for rows matching multiple metadata conditions.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection
+        Active SQLite connection.
+    db_table : str
+        Metadata table to query.
+    filters : dict
+        Dictionary of column/value filters passed to
+        `sqlite_utils.select_rows_by_columns`.
+    source_path : str | os.PathLike
+        Root directory containing the downloaded images.
+
+    Returns
+    -------
+    list[str]
+        File paths to the selected JPEG images. Returns an empty list when the
+        filter validation fails.
     """  
     try: 
         df_rows = sqlutl.select_rows_by_columns(conn=conn, 
@@ -179,15 +258,29 @@ def select_jpegs_by_columns(conn, db_table, filters: dict, source_path):
 def plot_random_image_grid(conn, db_table, image_path, no_of_images, centers, 
                            cols=3, cell_size=2.5):
     """
-    Plots a grid of random images from the specified centers.
-    :param conn: Active sqlite connection.
-    :param db_table: Name of the database table to query.
-    :param image_path: Base path to the images.
-    :param no_of_images: Number of random images to select and plot for each center.
-    :param centers: List of centers to select images from.
-    :param cols: Number of columns in the grid (default: 3).
-    :param cell_size: Size of each cell in the grid (default: 2.5).
-    :return: Dictionary mapping each center to the list of selected image file paths.
+    Plot random image grids for one or more centers.
+
+    Parameters
+    ----------
+    conn : sqlite3.Connection
+        Active SQLite connection.
+    db_table : str
+        Metadata table to query.
+    image_path : str | os.PathLike
+        Root directory containing the downloaded images.
+    no_of_images : int
+        Number of random images to plot per center.
+    centers : sequence[str]
+        Centers to visualize.
+    cols : int, optional
+        Number of columns in each grid.
+    cell_size : float, optional
+        Base figure-cell size used to scale the figure and titles.
+
+    Returns
+    -------
+    dict[str, list[str]]
+        Mapping from center name to the selected image file paths.
     """
     rows = math.ceil(no_of_images / cols)
 
@@ -242,12 +335,26 @@ def plot_random_image_grid(conn, db_table, image_path, no_of_images, centers,
 
 def plot_image_grid(image_files, cols=3, cell_size=2.5, images=None, titles=None):
     """
-    Plots a grid of images from the specified file paths or image arrays.
-    :param image_files: List of file paths to the images to plot (used if images is None).
-    :param cols: Number of columns in the grid (default: 3).
-    :param cell_size: Size of each cell in the grid (default: 2.5).
-    :param images: List of image arrays to plot (optional, used if image_files is None).
-    :param titles: List of titles for each image (optional).
+    Plot a grid of images from file paths or in-memory arrays.
+
+    Parameters
+    ----------
+    image_files : sequence[str] | None
+        Image file paths used when `images` is `None`.
+    cols : int, optional
+        Number of columns in the grid.
+    cell_size : float, optional
+        Base figure-cell size used to scale the figure and titles.
+    images : sequence[numpy.ndarray] | None, optional
+        In-memory images to plot instead of loading from disk.
+    titles : sequence[str] | None, optional
+        Optional extra titles appended per image.
+
+    Returns
+    -------
+    None
+        The function renders the grid with Matplotlib and does not return a
+        value.
     """
     no_of_images = len(image_files) if images is None else len(images)
     rows = math.ceil(no_of_images / cols)
@@ -286,12 +393,27 @@ def create_and_save_thumbnails(data: pd.DataFrame, centers: list,
                                path2images: str, path2thumbnails: str, 
                                size=(64, 64)):
     """
-    Creates and saves thumbnail images for the given data and centers.
-    :param data: DataFrame containing metadata for the images, including columns 'center', 'cohort_type', 'gene_symbol', 'sex', and 'omero_id'.
-    :param centers: List of centers to process.
-    :param path2images: Base path to the original images.
-    :param path2thumbnails: Base path to save the thumbnail images.
-    :param size: Size of the thumbnail images (default: (64, 64)).
+    Create thumbnail JPEGs for the selected centers.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Metadata containing at least `center`, `cohort_type`, `gene_symbol`,
+        `sex`, and `omero_id`.
+    centers : list[str]
+        Centers whose images should be processed.
+    path2images : str
+        Root directory containing the source images.
+    path2thumbnails : str
+        Root directory where thumbnails should be written.
+    size : tuple[int, int], optional
+        Maximum thumbnail size passed to `PIL.Image.thumbnail`.
+
+    Returns
+    -------
+    None
+        The function writes thumbnail files to disk and does not return a
+        value.
     """
     for center in centers:
         df_center = data[data.center == center]
@@ -343,14 +465,35 @@ def create_thumbnail_gallery(data: pd.DataFrame,
                              alignment_details: bool = False, 
                              image_only: bool = False):
     """
-    Creates an HTML gallery of thumbnail images organized by center, with optional alignment details.
-    :param data: DataFrame containing metadata for the images, including columns 'center', 'cohort_type', 'gene_symbol', 'sex', 'omero_id', and optionally 'fst_angle_prediction' and 'snd_angle_prediction' for alignment details.
-    :param html_file_name: Name of the HTML file to create 
-    :param title: Title to display at the top of the gallery.
-    :param html_dir: Directory where the HTML file will be saved.
-    :param thumbnails_dir: Base directory where thumbnail images are stored.
-    :param source_dir: Base directory where original images are stored (used for linking).
-    :param alignment_details: Whether to include alignment details in the gallery (default: False).
+    Create a simple HTML gallery of thumbnails grouped by center.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Metadata containing at least `center`, `cohort_type`, `gene_symbol`,
+        `sex`, and `omero_id`. When `alignment_details=True`, the dataframe is
+        also expected to contain `fst_angle_prediction` and
+        `snd_angle_prediction`.
+    html_file_name : str
+        Output HTML filename.
+    title : str
+        Title displayed at the top of the gallery.
+    html_dir : str
+        Directory where the HTML file should be written.
+    thumbnails_dir : str
+        Root directory containing thumbnail images.
+    source_dir : str
+        Root directory containing the original images used for the anchor
+        targets.
+    alignment_details : bool, optional
+        Whether to include per-image alignment predictions and center-level
+        alignment summaries.
+
+    Returns
+    -------
+    None
+        The function writes an HTML gallery to disk and does not return a
+        value.
     """
     html_dir_abs = os.path.abspath(html_dir)
     thumbnails_dir_abs = os.path.abspath(thumbnails_dir)
