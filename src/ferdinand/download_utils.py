@@ -389,15 +389,16 @@ def merge_metadata_files(config: dict, dirs: SimpleNamespace, logger: logging.Lo
 
     return all_data_df
 
-def get_extension(file_type: str) -> str:
+def get_extension(file_type: str | None) -> str:
     """
     Map a detected image format name to a filename extension.
 
     Parameters
     ----------
-    file_type : str
+    file_type : str | None
         File-type label such as `"JPEG"` or `"DICOM"`. Lookup is
-        case-insensitive.
+        case-insensitive. A missing value falls back to the generic `"bin"`
+        extension.
 
     Returns
     -------
@@ -405,6 +406,8 @@ def get_extension(file_type: str) -> str:
         Preferred extension without a leading dot. Unknown formats fall back to
         `"bin"`.
     """
+    if file_type is None:
+        return "bin"
     return IMAGE_FILE_EXTENSION_MAP.get(file_type.upper(), "bin")
 
 def download_image(omero_id, local_image_path, is_jpeg=True, save_local=True, logger=None):
@@ -447,6 +450,7 @@ def download_image(omero_id, local_image_path, is_jpeg=True, save_local=True, lo
     
     # construct URL based on image format (JPEG or original)
     image_url = os.path.join(f"{IMPC_JPEG_URL if is_jpeg else IMPC_ORIGINAL_URL}", str(omero_id))
+    print(f"Downloading image from {image_url} ...")
 
     # request image from IMPC server
     response = requests.get(image_url, headers=HEADERS)
