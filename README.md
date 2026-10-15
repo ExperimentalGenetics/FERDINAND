@@ -2,6 +2,9 @@
 
 An open framework for access and AI-ready preprocessing of IMPC 2D radiographs.
 
+> [!WARNING]
+> Shortly after we submitted our preprint, the IMPC images were moved, making the provided image download links unavailable. We are updating the links. **The pipeline itself is unaffected.**
+
 ## Getting Started
 
 There are two supported ways to run FERDINAND:
